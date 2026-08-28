@@ -1,0 +1,77 @@
+{
+  "name": "OneCall AI - Environment Smoke Test",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "bb623392-3105-48e1-9059-16e24b80d765",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b8d93439-9588-45f1-9b85-bdc13367743c",
+              "name": "project",
+              "value": "OneCall AI",
+              "type": "string"
+            },
+            {
+              "id": "b4b63763-db4c-4871-b03f-b497d2602ba0",
+              "name": "stage",
+              "value": 7,
+              "type": "number"
+            },
+            {
+              "id": "8953ec2b-c421-42dd-a17d-cbc6e96c6cf5",
+              "name": "status",
+              "value": "N8N_RUNTIME_OK",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        224,
+        0
+      ],
+      "id": "f09a1d08-058b-472f-8523-d1710a96d200",
+      "name": "Edit Fields"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "609c0ef5-38d8-4071-8f5a-dbe3c700748c",
+  "meta": {
+    "instanceId": "93f74e82f23f8980313a62546084fe63e8b1410b81aabb04dde78afd1b74a7e5"
+  },
+  "nodeGroups": [],
+  "id": "v0RHCaLJahL83Q6S",
+  "tags": []
+}
