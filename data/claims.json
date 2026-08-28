@@ -1,0 +1,50 @@
+[
+  {
+    "claim_id": "CL9001",
+    "member_id": "M1001",
+    "service": {
+      "service_code": "MRI-SIM-001",
+      "service_name": "MRI"
+    },
+    "service_date": "2026-05-14",
+    "provider_id": "P7001",
+    "provider_location_id": "L7102",
+    "status": "DENIED",
+    "denial_reason": "AUTHORIZATION_NOT_FOUND",
+    "authorization_reference": null,
+    "billed_amount": 1800.00,
+    "allowed_amount": 950.00
+  },
+  {
+    "claim_id": "CL9002",
+    "member_id": "M1002",
+    "service": {
+      "service_code": "MRI-SIM-001",
+      "service_name": "MRI"
+    },
+    "service_date": "2026-06-10",
+    "provider_id": "P7002",
+    "provider_location_id": "L7201",
+    "status": "DENIED",
+    "denial_reason": "AUTHORIZATION_NOT_FOUND",
+    "authorization_reference": null,
+    "billed_amount": 1650.00,
+    "allowed_amount": 900.00
+  },
+  {
+    "claim_id": "CL9004",
+    "member_id": "M1004",
+    "service": {
+      "service_code": "MRI-SIM-001",
+      "service_name": "MRI"
+    },
+    "service_date": "2026-07-18",
+    "provider_id": "P7003",
+    "provider_location_id": "L7301",
+    "status": "DENIED",
+    "denial_reason": "AUTHORIZATION_NOT_FOUND",
+    "authorization_reference": null,
+    "billed_amount": 1725.00,
+    "allowed_amount": 925.00
+  }
+]

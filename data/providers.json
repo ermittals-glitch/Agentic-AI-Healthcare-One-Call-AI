@@ -1,0 +1,48 @@
+[
+  {
+    "provider_id": "P7001",
+    "organization_name": "ABC Imaging",
+    "locations": [
+      {
+        "provider_location_id": "L7101",
+        "location_name": "ABC Imaging Dallas",
+        "city": "Dallas",
+        "state": "TX",
+        "network_status": "IN_NETWORK"
+      },
+      {
+        "provider_location_id": "L7102",
+        "location_name": "ABC Imaging Irving",
+        "city": "Irving",
+        "state": "TX",
+        "network_status": "IN_NETWORK"
+      }
+    ]
+  },
+  {
+    "provider_id": "P7002",
+    "organization_name": "Northstar Radiology",
+    "locations": [
+      {
+        "provider_location_id": "L7201",
+        "location_name": "Northstar Radiology Plano",
+        "city": "Plano",
+        "state": "TX",
+        "network_status": "IN_NETWORK"
+      }
+    ]
+  },
+  {
+    "provider_id": "P7003",
+    "organization_name": "Cedar Diagnostics",
+    "locations": [
+      {
+        "provider_location_id": "L7301",
+        "location_name": "Cedar Diagnostics Fort Worth",
+        "city": "Fort Worth",
+        "state": "TX",
+        "network_status": "IN_NETWORK"
+      }
+    ]
+  }
+]

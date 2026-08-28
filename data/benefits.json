@@ -1,0 +1,22 @@
+[
+  {
+    "benefit_id": "BEN5001",
+    "plan_id": "PLAN-PPO-001",
+    "service_code": "MRI-SIM-001",
+    "service_code_system": "SYNTHETIC",
+    "service_name": "MRI",
+    "covered": true,
+    "prior_authorization_required": true,
+    "network_requirement": "IN_NETWORK_ONLY"
+  },
+  {
+    "benefit_id": "BEN5002",
+    "plan_id": "PLAN-HMO-001",
+    "service_code": "OFFICE-VISIT-SIM-001",
+    "service_code_system": "SYNTHETIC",
+    "service_name": "Primary care office visit",
+    "covered": true,
+    "prior_authorization_required": false,
+    "network_requirement": "IN_NETWORK_ONLY"
+  }
+]

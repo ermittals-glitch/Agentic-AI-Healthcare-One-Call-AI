@@ -1,0 +1,118 @@
+[
+  {
+    "scenario_id": "SCN001",
+    "name": "Claim denied despite approved authorization",
+    "member_id": "M1001",
+    "claim_id": "CL9001",
+    "authorization_id": "PA8001",
+    "member_inquiry": "My MRI claim was denied because insurance says there was no authorization, but my doctor's office says it was approved.",
+    "expected_agent_path": [
+      "Intake",
+      "Eligibility",
+      "Benefits",
+      "Claims",
+      "Authorization",
+      "Provider",
+      "Resolution"
+    ],
+    "expected_evidence": [
+      "Coverage is active on the service date.",
+      "MRI is covered and requires prior authorization.",
+      "The claim was denied for AUTHORIZATION_NOT_FOUND.",
+      "An APPROVED authorization covers the service date.",
+      "The claim location is L7102 while the authorization location is L7101.",
+      "Both locations belong to ABC Imaging and are in network."
+    ],
+    "expected_root_cause": "AUTHORIZATION_CLAIM_LOCATION_MISMATCH",
+    "expected_recommended_action": "CLAIM_RECONSIDERATION",
+    "expected_member_transfer_required": false
+  },
+  {
+    "scenario_id": "SCN002",
+    "name": "Authorization actually missing",
+    "member_id": "M1002",
+    "claim_id": "CL9002",
+    "authorization_id": null,
+    "member_inquiry": "My MRI claim was denied because authorization wasn't found.",
+    "expected_agent_path": [
+      "Intake",
+      "Eligibility",
+      "Benefits",
+      "Claims",
+      "Authorization",
+      "Resolution"
+    ],
+    "expected_evidence": [
+      "Coverage is active on the service date.",
+      "MRI is covered and requires prior authorization.",
+      "The claim was denied for AUTHORIZATION_NOT_FOUND.",
+      "No authorization exists for this member, service, and service date."
+    ],
+    "expected_root_cause": "PRIOR_AUTHORIZATION_MISSING",
+    "expected_recommended_action": "PROVIDER_INITIATE_AUTHORIZATION",
+    "expected_member_transfer_required": false
+  },
+  {
+    "scenario_id": "SCN003",
+    "name": "Coverage showing inactive",
+    "member_id": "M1003",
+    "member_inquiry": "My doctor's office says my insurance is inactive, but I enrolled months ago.",
+    "expected_agent_path": [
+      "Intake",
+      "Eligibility",
+      "Benefits / Enrollment investigation",
+      "Resolution"
+    ],
+    "expected_evidence": [
+      "The servicing coverage status is INACTIVE.",
+      "Enrollment status is ACTIVE with an effective date of 2026-02-01.",
+      "There is no coverage termination date.",
+      "The eligibility record was last synchronized before enrollment became effective."
+    ],
+    "expected_root_cause": "ELIGIBILITY_ENROLLMENT_MISMATCH",
+    "expected_recommended_action": "ELIGIBILITY_RECORD_REVIEW",
+    "expected_member_transfer_required": false
+  },
+  {
+    "scenario_id": "SCN004",
+    "name": "Payer system failure and recovery",
+    "member_id": "M1004",
+    "claim_id": "CL9004",
+    "authorization_id": "PA8004",
+    "member_inquiry": "My claim was denied, but the authorization system isn't responding.",
+    "expected_agent_path": [
+      "Intake",
+      "Eligibility",
+      "Benefits",
+      "Claims",
+      "Authorization",
+      "Tool Failure",
+      "Retry",
+      "Alternate Lookup",
+      "Resolution"
+    ],
+    "expected_evidence": [
+      "Coverage is active on the service date.",
+      "MRI is covered and requires prior authorization.",
+      "The claim was denied for AUTHORIZATION_NOT_FOUND and has no authorization reference.",
+      "An APPROVED authorization matches the member, service, provider, location, and service date.",
+      "The authorization is discoverable through alternate member, service, and date lookup."
+    ],
+    "expected_root_cause": "AUTHORIZATION_CLAIM_LINK_FAILURE",
+    "expected_recommended_action": "CLAIM_RECONSIDERATION",
+    "expected_member_transfer_required": false,
+    "primary_lookup_failure": true,
+    "retry_failure": true,
+    "alternate_lookup_success": true,
+    "expected_recovery_path": [
+      "TOOL_FAILURE",
+      "RETRY",
+      "ALTERNATE_LOOKUP",
+      "SUCCESS"
+    ],
+    "human_escalation_test": {
+      "alternate_lookup_success": false,
+      "expected_outcome": "HUMAN_ESCALATION"
+    }
+  }
+]

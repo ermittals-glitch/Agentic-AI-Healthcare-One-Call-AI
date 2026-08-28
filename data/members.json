@@ -1,0 +1,48 @@
+[
+  {
+    "member_id": "M1001",
+    "name": "Alex Carter",
+    "date_of_birth": "1985-04-12",
+    "plan_id": "PLAN-PPO-001",
+    "plan_name": "OneHealth PPO",
+    "coverage_status": "ACTIVE",
+    "coverage_effective_date": "2026-01-01",
+    "coverage_termination_date": null,
+    "enrollment_status": "ACTIVE"
+  },
+  {
+    "member_id": "M1002",
+    "name": "Jordan Lee",
+    "date_of_birth": "1991-09-23",
+    "plan_id": "PLAN-PPO-001",
+    "plan_name": "OneHealth PPO",
+    "coverage_status": "ACTIVE",
+    "coverage_effective_date": "2026-01-01",
+    "coverage_termination_date": null,
+    "enrollment_status": "ACTIVE"
+  },
+  {
+    "member_id": "M1003",
+    "name": "Taylor Morgan",
+    "date_of_birth": "1978-02-17",
+    "plan_id": "PLAN-HMO-001",
+    "plan_name": "OneHealth HMO",
+    "coverage_status": "INACTIVE",
+    "coverage_effective_date": "2026-02-01",
+    "coverage_termination_date": null,
+    "enrollment_status": "ACTIVE",
+    "enrollment_effective_date": "2026-02-01",
+    "eligibility_last_synced_date": "2026-01-31"
+  },
+  {
+    "member_id": "M1004",
+    "name": "Casey Parker",
+    "date_of_birth": "1988-11-05",
+    "plan_id": "PLAN-PPO-001",
+    "plan_name": "OneHealth PPO",
+    "coverage_status": "ACTIVE",
+    "coverage_effective_date": "2026-01-01",
+    "coverage_termination_date": null,
+    "enrollment_status": "ACTIVE"
+  }
+]

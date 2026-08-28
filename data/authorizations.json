@@ -1,0 +1,33 @@
+[
+  {
+    "authorization_id": "PA8001",
+    "member_id": "M1001",
+    "service": {
+      "service_code": "MRI-SIM-001",
+      "service_name": "MRI"
+    },
+    "provider_id": "P7001",
+    "provider_location_id": "L7101",
+    "status": "APPROVED",
+    "effective_start_date": "2026-05-01",
+    "effective_end_date": "2026-05-31"
+  },
+  {
+    "authorization_id": "PA8004",
+    "member_id": "M1004",
+    "service": {
+      "service_code": "MRI-SIM-001",
+      "service_name": "MRI"
+    },
+    "provider_id": "P7003",
+    "provider_location_id": "L7301",
+    "status": "APPROVED",
+    "effective_start_date": "2026-07-01",
+    "effective_end_date": "2026-07-31",
+    "alternate_lookup_keys": [
+      "member_id",
+      "service.service_code",
+      "service_date"
+    ]
+  }
+]
