@@ -16,6 +16,132 @@ st.set_page_config(
 )
 
 
+AWAITING_HUMAN_APPROVAL = "AWAITING_HUMAN_APPROVAL"
+READY_FOR_ACTION = "READY_FOR_ACTION"
+HUMAN_REVIEW_REQUIRED = "HUMAN_REVIEW_REQUIRED"
+DECISION_TO_STATUS = {
+    None: AWAITING_HUMAN_APPROVAL,
+    "APPROVED": READY_FOR_ACTION,
+    "ESCALATED": HUMAN_REVIEW_REQUIRED,
+}
+
+REPRESENTATIVE_OUTCOMES: dict[str, dict[str, dict[str, Any]]] = {
+    "SCN001": {
+        "APPROVED": {
+            "headline": "Claim reconsideration ready for action",
+            "action": "CLAIM_RECONSIDERATION",
+            "explanation": (
+                "Representative approved preparation of claim reconsideration using "
+                "the approved authorization and the identified claim/authorization "
+                "servicing-location mismatch."
+            ),
+            "evidence": [
+                "Denied claim",
+                "Approved authorization",
+                "Claim servicing location",
+                "Authorization servicing location",
+                "Same provider organization",
+                "In-network validation",
+            ],
+            "member_action_required": "None",
+            "representative_ownership": "Yes",
+        },
+        "ESCALATED": {
+            "headline": "Claims and Authorization specialist review requested",
+            "specialist_queue": "Claims + Authorization Review",
+            "reason": (
+                "Representative requested additional review of the claim/authorization "
+                "location mismatch before proceeding with reconsideration."
+            ),
+            "evidence": "Claim + authorization + provider/location findings",
+        },
+    },
+    "SCN002": {
+        "APPROVED": {
+            "headline": "Provider authorization follow-up ready",
+            "action": "PROVIDER_INITIATE_AUTHORIZATION",
+            "explanation": (
+                "Representative approved provider follow-up because the covered MRI "
+                "requires prior authorization and no applicable authorization was found."
+            ),
+            "operational_next_step": (
+                "Provider should initiate the required prior-authorization process "
+                "before claim resolution can proceed."
+            ),
+        },
+        "ESCALATED": {
+            "headline": "Authorization specialist review requested",
+            "specialist_queue": "Authorization Review",
+            "reason": (
+                "Representative requested specialist review to confirm whether an "
+                "exception, retro-authorization path, or additional authorization "
+                "review is appropriate."
+            ),
+            "evidence": (
+                "Eligibility + benefit requirement + denied claim + authorization "
+                "NOT_FOUND"
+            ),
+        },
+    },
+    "SCN003": {
+        "APPROVED": {
+            "headline": "Eligibility record review ready",
+            "action": "ELIGIBILITY_RECORD_REVIEW",
+            "explanation": (
+                "Representative approved internal eligibility record review using the "
+                "active enrollment evidence and the conflicting inactive servicing "
+                "eligibility record."
+            ),
+            "operational_next_step": (
+                "Enrollment and servicing eligibility records are ready for internal "
+                "reconciliation."
+            ),
+        },
+        "ESCALATED": {
+            "headline": "Eligibility and Enrollment specialist review requested",
+            "specialist_queue": "Eligibility + Enrollment Review",
+            "reason": (
+                "Representative requested specialist review of the enrollment/"
+                "eligibility synchronization discrepancy."
+            ),
+            "evidence": (
+                "Enrollment status + effective date + servicing eligibility state + "
+                "synchronization evidence"
+            ),
+        },
+    },
+    "SCN004": {
+        "APPROVED": {
+            "headline": (
+                "Recovered authorization evidence ready for claim reconsideration"
+            ),
+            "action": "CLAIM_RECONSIDERATION",
+            "explanation": (
+                "Representative approved claim reconsideration after OneCall AI "
+                "recovered the authorization through an alternate lookup strategy."
+            ),
+            "show_recovery": True,
+        },
+        "ESCALATED": {
+            "headline": "Claims and Authorization specialist review requested",
+            "specialist_queue": "Claims + Authorization Review",
+            "reason": (
+                "Representative requested specialist review despite successful "
+                "authorization recovery because the original authorization lookup "
+                "path failed."
+            ),
+            "evidence": [
+                "Primary lookup failure",
+                "Retry failure",
+                "Alternate lookup selected",
+                "Recovered authorization",
+                "Claim evidence",
+            ],
+        },
+    },
+}
+
+
 @st.cache_data
 def get_demo_data() -> dict[str, list[dict[str, Any]]]:
     """Load the repository's synthetic, validated scenario fixtures."""
@@ -33,15 +159,46 @@ def humanize(value: Any) -> str:
     return str(value).replace("_", " ").capitalize()
 
 
-def apply_approval_state(case_state: dict[str, Any], approval_status: str | None) -> None:
-    """Apply a UI-only representative decision without performing a payer write."""
+def apply_representative_state(case_state: dict[str, Any]) -> None:
+    """Project the UI-only representative decision onto the displayed case state."""
 
-    if approval_status == "APPROVED":
-        case_state["human_approval"]["status"] = "APPROVED"
-        case_state["current_status"] = "READY_FOR_ACTION"
-    elif approval_status == "ESCALATED":
-        case_state["human_approval"]["status"] = "ESCALATED"
-        case_state["current_status"] = "HUMAN_REVIEW_REQUIRED"
+    decision = st.session_state.representative_decision
+    if decision not in DECISION_TO_STATUS:
+        decision = None
+    case_state["current_status"] = DECISION_TO_STATUS[decision]
+    case_state["human_approval"]["status"] = decision or "PENDING"
+    case_state["human_approval"]["external_write_performed"] = False
+    st.session_state.post_decision_case_status = DECISION_TO_STATUS[decision]
+
+
+def reset_representative_decision(*, clear_case: bool = False) -> None:
+    """Clear only the human choice and restore the awaiting-approval boundary."""
+
+    st.session_state.representative_decision = None
+    st.session_state.post_decision_case_status = AWAITING_HUMAN_APPROVAL
+    case_state = st.session_state.get("case_state")
+    if case_state:
+        apply_representative_state(case_state)
+    if clear_case:
+        st.session_state.case_state = None
+        st.session_state.investigated_scenario_id = None
+
+
+def reset_case_for_scenario() -> None:
+    """Reset the decision and prior playback when the demo scenario changes."""
+
+    reset_representative_decision(clear_case=True)
+
+
+def select_representative_decision(decision: str) -> None:
+    """Persist one validated representative choice without performing a payer write."""
+
+    if decision not in {"APPROVED", "ESCALATED"}:
+        raise ValueError(f"Unsupported representative decision: {decision}")
+    st.session_state.representative_decision = decision
+    case_state = st.session_state.get("case_state")
+    if case_state:
+        apply_representative_state(case_state)
 
 
 def scenario_intake(
@@ -185,6 +342,168 @@ def render_selected_path(case_state: dict[str, Any]) -> None:
         )
 
 
+def render_representative_orchestration_event(case_state: dict[str, Any]) -> None:
+    """Append the human decision visually after the immutable AI/tool trace."""
+
+    decision = st.session_state.representative_decision
+    if decision == "APPROVED":
+        st.markdown(
+            ":orange-badge[Human review] **Representative approved "
+            f"{case_state['recommended_action']}**"
+        )
+        st.markdown(":green-badge[Case] **Ready for action**")
+    elif decision == "ESCALATED":
+        st.markdown(
+            ":orange-badge[Human review] **Representative requested specialist review**"
+        )
+        st.markdown(":orange-badge[Case] **Human review required**")
+        st.markdown(":blue-badge[Context] **Shared case evidence preserved**")
+
+
+def render_evidence_package(evidence: str | list[str]) -> None:
+    """Render a human-readable evidence package from the UI outcome matrix."""
+
+    if isinstance(evidence, list):
+        for item in evidence:
+            st.markdown(f"- {item}")
+    else:
+        st.write(evidence)
+
+
+def render_recovery_evidence() -> None:
+    """Make the validated SCN004 fallback path explicit after approval."""
+
+    st.markdown("**Recovered authorization evidence**")
+    columns = st.columns(4)
+    columns[0].metric("Primary authorization lookup", "Failed")
+    columns[1].metric("Retry", "Failed")
+    columns[2].metric("Alternate lookup", "Success")
+    columns[3].metric("Authorization recovered", "Yes")
+
+
+def render_case_continuity(decision: str) -> None:
+    """Show the member and write-safety guarantees for either decision path."""
+
+    st.markdown("**Member and case continuity**")
+    columns = st.columns(3)
+    columns[0].metric("Member transfer required", "No")
+    columns[1].metric("Member must repeat issue", "No")
+    columns[2].metric("Shared case context", "Preserved")
+    if decision == "APPROVED":
+        st.write(
+            "**Payer record modified:** No — recommendation staged only in this "
+            "prototype."
+        )
+    else:
+        st.write(
+            "**Payer record modified:** No — evidence package prepared only in this "
+            "prototype."
+        )
+        st.info(
+            "Case routed for specialist review with shared context. This is an internal "
+            "case handoff; the member remains in the current interaction.",
+            icon=":material/forward_to_inbox:",
+        )
+
+
+def render_post_decision_result(case_state: dict[str, Any], scenario_id: str) -> None:
+    """Render one explicit final representative-decision result card."""
+
+    decision = st.session_state.representative_decision
+    outcome = REPRESENTATIVE_OUTCOMES[scenario_id][decision]
+    status = DECISION_TO_STATUS[decision]
+    decision_label = "Approved" if decision == "APPROVED" else "Specialist review requested"
+
+    with st.container(border=True):
+        if decision == "APPROVED":
+            st.success(outcome["headline"], icon=":material/verified:")
+        else:
+            st.warning(outcome["headline"], icon=":material/support_agent:")
+
+        state_columns = st.columns(2)
+        with state_columns[0].container(border=True, height="stretch"):
+            st.caption("REPRESENTATIVE DECISION")
+            st.subheader(decision_label)
+            st.caption(f"Technical enum: `{decision}`")
+        with state_columns[1].container(border=True, height="stretch"):
+            st.caption("CASE STATUS")
+            st.subheader(humanize(status))
+            st.caption(f"Technical enum: `{status}`")
+
+        if decision == "APPROVED":
+            st.markdown("**Approved next step**")
+            st.write(humanize(outcome["action"]))
+            st.caption(f"Technical enum: `{outcome['action']}`")
+            st.write(outcome["explanation"])
+            if outcome.get("operational_next_step"):
+                st.markdown("**Operational next step**")
+                st.write(outcome["operational_next_step"])
+            if outcome.get("evidence"):
+                st.markdown("**Evidence referenced**")
+                render_evidence_package(outcome["evidence"])
+            if outcome.get("show_recovery"):
+                render_recovery_evidence()
+            if outcome.get("member_action_required"):
+                detail_columns = st.columns(2)
+                detail_columns[0].metric(
+                    "Member action required", outcome["member_action_required"]
+                )
+                detail_columns[1].metric(
+                    "Representative retains interaction ownership",
+                    outcome["representative_ownership"],
+                )
+        else:
+            st.markdown("**Specialist queue**")
+            st.write(outcome["specialist_queue"])
+            st.markdown("**Reason**")
+            st.write(outcome["reason"])
+            st.markdown("**Evidence package**")
+            render_evidence_package(outcome["evidence"])
+
+        render_case_continuity(decision)
+
+    st.button(
+        "Change representative decision",
+        icon=":material/restart_alt:",
+        on_click=reset_representative_decision,
+        key=f"reset_decision_{scenario_id}",
+    )
+
+
+def render_representative_decision(
+    case_state: dict[str, Any], scenario_id: str
+) -> None:
+    """Render the awaiting choice or the single persisted decision result."""
+
+    st.subheader(":material/approval: Representative decision")
+    decision = st.session_state.representative_decision
+    if decision is None:
+        st.write(
+            "AI has completed the investigation and recommended the next step. "
+            "A representative must approve the operational action or request "
+            "specialist review."
+        )
+        with st.container(horizontal=True):
+            st.button(
+                "Approve recommended action",
+                type="primary",
+                icon=":material/check:",
+                on_click=select_representative_decision,
+                args=("APPROVED",),
+                key=f"approve_{scenario_id}",
+            )
+            st.button(
+                "Escalate for specialist review",
+                type="primary",
+                icon=":material/escalator_warning:",
+                on_click=select_representative_decision,
+                args=("ESCALATED",),
+                key=f"escalate_{scenario_id}",
+            )
+    else:
+        render_post_decision_result(case_state, scenario_id)
+
+
 def render_resolution(
     case_state: dict[str, Any], scenario: dict[str, Any]
 ) -> None:
@@ -227,47 +546,25 @@ def render_resolution(
             st.markdown(f"- {evidence}")
 
     if case_state["human_approval"]["required"]:
-        st.subheader(":material/approval: Representative decision")
-        st.caption(
-            "The prototype recommends; it does not modify a payer record. A human "
-            "must approve or escalate the next step."
-        )
-        with st.container(horizontal=True):
-            if st.button(
-                "Approve recommended action",
-                type="primary",
-                icon=":material/check:",
-                key=f"approve_{scenario['scenario_id']}",
-            ):
-                approvals = dict(st.session_state.approval_states)
-                approvals[scenario["scenario_id"]] = "APPROVED"
-                st.session_state.approval_states = approvals
-                st.rerun()
-            if st.button(
-                "Escalate to specialist",
-                icon=":material/escalator_warning:",
-                key=f"escalate_{scenario['scenario_id']}",
-            ):
-                approvals = dict(st.session_state.approval_states)
-                approvals[scenario["scenario_id"]] = "ESCALATED"
-                st.session_state.approval_states = approvals
-                st.rerun()
-
-        approval_status = case_state["human_approval"]["status"]
-        if approval_status == "APPROVED":
-            st.success(
-                "Representative approved · Case is ready for the downstream action.",
-                icon=":material/verified:",
-            )
-        elif approval_status == "ESCALATED":
-            st.warning(
-                "Specialist review requested · Member context remains attached.",
-                icon=":material/support_agent:",
-            )
+        render_representative_decision(case_state, scenario["scenario_id"])
 
 
 def render_operational_value(case_state: dict[str, Any]) -> None:
     st.header(":material/insights: Operational value")
+    if st.session_state.representative_decision is not None:
+        first_row = st.columns(3)
+        first_row[0].metric("Member explanation captured", "Once")
+        first_row[1].metric("Member transfer", "Avoided")
+        first_row[2].metric("Repeated storytelling", "Avoided")
+        second_row = st.columns(2)
+        second_row[0].metric("Cross-system investigation", "Coordinated")
+        second_row[1].metric("Human control", "Preserved")
+        st.caption(
+            "The representative decision changes only the prototype case state; no "
+            "payer transaction is executed."
+        )
+        return
+
     unique_domain_agents = {
         agent
         for agent in case_state["agents_called"]
@@ -305,7 +602,8 @@ def render_validation_evidence() -> None:
 
 st.session_state.setdefault("case_state", None)
 st.session_state.setdefault("investigated_scenario_id", None)
-st.session_state.setdefault("approval_states", {})
+st.session_state.setdefault("representative_decision", None)
+st.session_state.setdefault("post_decision_case_status", AWAITING_HUMAN_APPROVAL)
 st.session_state.setdefault("channel", "Call")
 
 datasets = get_demo_data()
@@ -338,6 +636,7 @@ with intake_column:
             format_func=scenario_names.get,
             key="selected_scenario_id",
             label_visibility="collapsed",
+            on_change=reset_case_for_scenario,
         )
         st.caption(
             "This is the primary demo control. Choose one of the four validated case "
@@ -391,6 +690,7 @@ with intake_column:
         )
 
     if submitted:
+        reset_representative_decision()
         if not member_inquiry.strip():
             st.warning("Enter a member inquiry before starting resolution.")
         else:
@@ -400,12 +700,9 @@ with intake_column:
                     "channel": st.session_state.channel,
                     "member_inquiry": member_inquiry.strip(),
                 }
-                apply_approval_state(
-                    resolved_case,
-                    st.session_state.approval_states.get(selected_scenario_id),
-                )
                 st.session_state.case_state = resolved_case
                 st.session_state.investigated_scenario_id = selected_scenario_id
+                apply_representative_state(resolved_case)
             except SimulationDataError as exc:
                 st.error(f"The validated scenario could not be loaded: {exc}")
 
@@ -417,9 +714,7 @@ show_results = (
 active_case = case_state if show_results else None
 
 if active_case:
-    apply_approval_state(
-        active_case, st.session_state.approval_states.get(selected_scenario_id)
-    )
+    apply_representative_state(active_case)
 
 with architecture_column:
     st.subheader(":material/hub: System architecture and request flow")
@@ -444,6 +739,7 @@ if active_case:
     ):
         for activity in active_case["investigation_trace"]:
             render_activity(activity)
+        render_representative_orchestration_event(active_case)
     render_selected_path(active_case)
     render_resolution(active_case, selected_scenario)
     render_operational_value(active_case)

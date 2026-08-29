@@ -44,7 +44,7 @@ Maintains stable n8n workflow definitions, deterministic domain tools, constrain
 4. **Deterministic checks:** Eligibility, Benefits, Claims, Authorization, and Provider workflows return synthetic payer facts.
 5. **Recovery:** `SCN004` records two authorization lookup failures, then succeeds through the alternate lookup route.
 6. **Evidence synthesis:** The Resolution Agent selects a validated root-cause and action enum and explains the evidence.
-7. **Human boundary:** Recommendations that imply a payer action wait for representative approval; unsafe or insufficient cases go to human review.
+7. **Human boundary:** Recommendations that imply a payer action wait for representative approval. Approval changes the UI case to `READY_FOR_ACTION`; internal specialist escalation changes it to `HUMAN_REVIEW_REQUIRED` while preserving shared context.
 8. **Representative view:** The console presents the consolidated result without asking the member to repeat the story.
 
 ## Final implementation state
@@ -53,7 +53,8 @@ Maintains stable n8n workflow definitions, deterministic domain tools, constrain
 - The Main Orchestrator, Orchestrator Agent, and Resolution Agent remain unchanged by the final UI pass.
 - Four agentic scenarios previously passed runtime evaluation: `4/4`.
 - The deterministic domain tool suite previously passed validation.
-- The Streamlit demo now supports Call and Chat intake, all four scenarios, one-time inquiry capture, orchestration status, evidence, approval controls, operational value, and an embedded architecture diagram.
+- The Streamlit demo now supports Call and Chat intake, all four scenarios, one-time inquiry capture, orchestration status, evidence, a functional human-decision state machine, operational value, and an embedded architecture diagram.
+- All eight scenario/decision outcomes are explicit: four approval results and four internal specialist-review results. The unselected decision disappears after a choice, and the representative can clear only that choice without rerunning AI investigation.
 - Controlled playback is intentionally used for the front-end demo so presentation does not depend on external model or local n8n availability.
 
 ## Operational value demonstrated
@@ -62,4 +63,4 @@ The project demonstrates reduced member repetition, fewer transfers, faster evid
 
 ## Safety and privacy boundary
 
-All repository data is synthetic. Secrets remain in an ignored local environment file and are not stored in workflow JSON. Debug tracing is opt-in and limited to whitelisted metadata. The UI does not display secrets, Authorization headers, model prompts, raw model responses, or hidden reasoning.
+All repository data is synthetic. Secrets remain in an ignored local environment file and are not stored in workflow JSON. Debug tracing is opt-in and limited to whitelisted metadata. The UI does not display secrets, Authorization headers, model prompts, raw model responses, or hidden reasoning. Approval stages a recommendation only, and escalation prepares a shared-context evidence package only; neither path modifies a payer record.

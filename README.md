@@ -63,7 +63,9 @@ See [Architecture and flow](docs/ARCHITECTURE_AND_FLOW.md) for component and req
 3. The member concern is captured once in the intake note and retained in shared case context.
 4. The orchestrated path shows intake, planning, domain checks, recovery steps, synthesis, and recommendation.
 5. The final panel explains the root cause, next action, approval requirement, transfer requirement, and supporting evidence.
-6. The representative approves the recommendation or escalates the complete case context to a specialist. No payer write is performed by the prototype.
+6. The representative approves the recommendation or routes the complete case context for internal specialist review. Approval moves the prototype case to `READY_FOR_ACTION`; escalation moves it to `HUMAN_REVIEW_REQUIRED`. No payer write is performed.
+
+The human-in-the-loop boundary is functional and deterministic in Streamlit. The AI layer investigates and recommends, while the representative owns the final approve/escalate choice. A decided case replaces the two choice buttons with one explicit outcome card; **Change representative decision** clears only the human choice and returns the case to `AWAITING_HUMAN_APPROVAL` without rerunning the investigation.
 
 ## Validated scenarios
 

@@ -10,21 +10,25 @@ OneCall AI changes that experience. The member explains the problem once. The sy
 
 At the top, this looks like a real call-center intake. I can choose Call or Chat, select one of four validated synthetic scenarios, and review the member ID, service, date, and inquiry. The data is synthetic, so no real member information is used.
 
-I’m going to use scenario four because it shows both the normal workflow and failure recovery. The member says the claim was denied, but the authorization system is not responding. The intake note captures that concern once, while the request-flow diagram on the right shows how the same context moves through the system. The member does not have to repeat the story as the investigation crosses payer domains.
+I’m going to use scenario one: a claim was denied even though the provider says the authorization was approved. The intake note captures that concern once, while the request-flow diagram on the right shows how the same context moves through the system. The member does not have to repeat the story as the investigation crosses payer domains.
 
 I’ll click Start resolution.
 
-Now the orchestration section shows the complete path: intake, the orchestrator, payer-system checks, evidence synthesis, and the final recommendation. In the detailed trace, OneCall AI verifies coverage and benefits, reviews the claim denial, and then checks authorization.
-
-For this scenario, the primary authorization lookup fails. The orchestrator retries once, that retry also fails, and then it deliberately switches to an alternate lookup using the member, service, and date. The alternate route finds the approved authorization. This is a bounded recovery strategy—not an open-ended retry loop—and the previous evidence stays in shared state.
+Now the orchestration section shows the complete path: intake, the orchestrator, payer-system checks, evidence synthesis, and the final recommendation. In the detailed trace, OneCall AI verifies coverage and benefits, reviews the denied claim, finds the approved authorization, and validates the provider organization and servicing locations. Every step builds on the same shared case evidence.
 
 The architecture diagram explains what is happening behind the console. The request enters once through Streamlit. The Main Orchestrator maintains shared case state. The Orchestrator Agent chooses one allowed next step, and the five deterministic domain tools return payer facts for eligibility, benefits, claims, authorization, and provider information. Once enough evidence is available, a separate Resolution Agent synthesizes the result. The final outcome returns to the representative for approval or human review.
 
 That separation is important: the language model does not invent payer facts. The tool layer is deterministic, agent decisions are constrained, outputs are enum-validated, and a human remains in control of any action.
 
-In the final resolution panel, the root cause is an authorization-claim link failure. The primary and retry paths failed, but alternate lookup found an approved authorization, while the denied claim had no authorization reference. The recommended next action is claim reconsideration.
+In the final resolution panel, the root cause is an authorization-claim servicing-location mismatch. The claim and approved authorization point to different servicing locations, while provider validation confirms that both locations belong to the same in-network organization. The recommended next action is claim reconsideration.
 
-The representative can see the workflow status, the supporting evidence, whether human approval is required, and whether the member needs to be transferred. Here, no member transfer is required. I can approve the recommendation or escalate the complete case context to a specialist. Either way, this prototype does not write to a payer system; it demonstrates the human decision boundary.
+The representative can see the workflow status, supporting evidence, and whether human approval or a member transfer is required. The AI has completed its work, but the case is still waiting at `AWAITING_HUMAN_APPROVAL`.
+
+I’ll click Approve recommended action.
+
+The two decision choices are now replaced by one explicit representative result. The decision is Approved, and the case status changes to `READY_FOR_ACTION`. The approved next step is claim reconsideration. The result also makes four boundaries clear: member transfer is No, the member does not repeat the issue, shared case context is preserved, and no payer record was modified.
+
+This is the human-in-the-loop boundary. The AI investigates and recommends, the representative decides, and only then is the operational action ready. In a real implementation, an authenticated and governed payer integration would submit that action after approval. This prototype stages the recommendation only.
 
 The operational value is intentionally presented without assumed dollar savings. The value is fewer transfers, less repeated storytelling, faster evidence gathering, lower manual navigation across systems, and more consistent resolution handling.
 

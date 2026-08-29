@@ -10,7 +10,7 @@ OneCall AI uses layered validation so deterministic facts, orchestration behavio
 | Deterministic demo | Python unit tests assert root causes, routing, recovery, actions, and no writes | `10/10` simulator tests pass in the final UI pass |
 | Domain tools | n8n harness checks eligibility, benefits, claims, authorization, and provider outputs | Previously runtime-validated `PASS` |
 | Agentic orchestration | n8n evaluation asserts all four scenario outcomes and routing constraints | Previously runtime-validated `PASS 4/4` |
-| Streamlit presentation | Compilation and Streamlit AppTest exercise initial and resolved renders | No uncaught exceptions in the final UI pass |
+| Streamlit presentation | Compilation and Streamlit AppTest exercise initial, resolved, and representative-decision states | Eight decision branches and three reset behaviors pass |
 | Configuration and docs | TOML parse, link/path review, secret-pattern scan, and repository status | Included in final validation checklist |
 
 ## Deterministic simulator tests
@@ -61,7 +61,18 @@ The final presentation checks cover:
 - resolved render with orchestration trace, Mermaid architecture, evidence, and approval actions;
 - `SCN004` retry and alternate-lookup recovery visibility;
 - representative approval and escalation UI state;
+- all eight `SCN001`–`SCN004` approval/escalation outcome branches;
+- correct `READY_FOR_ACTION` and `HUMAN_REVIEW_REQUIRED` transitions;
+- disappearance of both original decision buttons after a choice;
+- scenario-change, new-resolution, and Change decision reset behavior;
+- preserved shared context, no member transfer, and explicit no-write language;
 - absence of payer writes and real member data.
+
+The dedicated AppTest module is `tests/test_streamlit_human_decision.py`. It contains eight scenario/decision tests plus three session-state reset tests. Run it directly with:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest tests.test_streamlit_human_decision -v
+```
 
 Manual review remains appropriate for responsive layout, Mermaid legibility, and the complete 3–5 minute demo story.
 
