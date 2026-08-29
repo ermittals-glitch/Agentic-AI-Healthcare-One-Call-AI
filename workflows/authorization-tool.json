@@ -1,0 +1,115 @@
+{
+  "name": "OneCall AI - Authorization Tool",
+  "id": "c5ff9739-29de-4aa1-b99d-2adb845fcb80",
+  "versionId": "36ed00f5-f7c0-4b07-a590-4e0341134aae",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "member_id"
+            },
+            {
+              "name": "service_code"
+            },
+            {
+              "name": "service_date"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "664be9aa-cb46-445d-b21a-7f4237ffbff9",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "fileSelector": "/files/data/authorizations.json",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        224,
+        0
+      ],
+      "id": "04345440-a2a0-4af4-925f-01c48376b921",
+      "name": "Read Authorization Data"
+    },
+    {
+      "parameters": {
+        "operation": "fromJson",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        448,
+        0
+      ],
+      "id": "45d824cf-c3aa-4901-9e4e-05d568722646",
+      "name": "Parse Authorization JSON"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get inputs passed into this sub-workflow\nconst triggerInput = $('When Executed by Another Workflow').first().json;\nconst memberId = triggerInput.member_id ?? null;\nconst serviceCode = triggerInput.service_code ?? null;\nconst serviceDate = triggerInput.service_date ?? null;\n\n// Parsed authorizations.json from the previous node\nconst authorizations = $input.first().json.data;\n\n// Validate input\nif (!memberId || !serviceCode || !serviceDate) {\n  return [\n    {\n      json: {\n        tool: 'AUTHORIZATION',\n        status: 'INVALID_INPUT',\n        member_id: memberId,\n        service_code: serviceCode,\n        service_date: serviceDate,\n        data: null,\n        error: 'member_id, service_code and service_date are required'\n      }\n    }\n  ];\n}\n\n// Dates are normalized YYYY-MM-DD, so direct comparison is deterministic\nconst authorization = authorizations.find(\n  (record) =>\n    record.member_id === memberId &&\n    record.service?.service_code === serviceCode &&\n    (!record.effective_start_date ||\n      serviceDate >= record.effective_start_date) &&\n    (!record.effective_end_date ||\n      serviceDate <= record.effective_end_date)\n);\n\n// Authorization not found\nif (!authorization) {\n  return [\n    {\n      json: {\n        tool: 'AUTHORIZATION',\n        status: 'NOT_FOUND',\n        member_id: memberId,\n        service_code: serviceCode,\n        service_date: serviceDate,\n        data: null,\n        error: 'Authorization not found'\n      }\n    }\n  ];\n}\n\n// Return only fields useful to servicing\nreturn [\n  {\n    json: {\n      tool: 'AUTHORIZATION',\n      status: 'SUCCESS',\n      member_id: authorization.member_id,\n      service_code: authorization.service.service_code,\n      service_date: serviceDate,\n      data: {\n        authorization_id: authorization.authorization_id,\n        service_name: authorization.service.service_name,\n        status: authorization.status,\n        provider_id: authorization.provider_id,\n        provider_location_id:\n          authorization.provider_location_id,\n        effective_start_date:\n          authorization.effective_start_date ?? null,\n        effective_end_date:\n          authorization.effective_end_date ?? null\n      },\n      error: null\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "id": "911acdd3-b09d-4911-882f-2cfa71f88072",
+      "name": "Lookup Authorization"
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Read Authorization Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Authorization Data": {
+      "main": [
+        [
+          {
+            "node": "Parse Authorization JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Authorization JSON": {
+      "main": [
+        [
+          {
+            "node": "Lookup Authorization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": [],
+  "tags": []
+}

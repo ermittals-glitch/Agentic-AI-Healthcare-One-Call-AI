@@ -1,0 +1,664 @@
+{
+  "name": "OneCall AI - Domain Tools Automated Test Harness",
+  "id": "7ea06982-d643-4b0f-999a-0d924fef5528",
+  "versionId": "1cb1a17e-b24e-4505-853d-dda72f44354b",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1200,
+        0
+      ],
+      "id": "1d7e058a-4e14-413d-b205-002262ef3b42",
+      "name": "When clicking 'Execute workflow'"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  { json: { member_id: 'M1001' } },\n  { json: { member_id: 'M1003' } },\n  { json: { member_id: 'M9999' } }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -900,
+        -600
+      ],
+      "id": "948b8d84-1671-4d33-91cf-29e3761054a7",
+      "name": "Generate Eligibility Tests"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "OneCall AI - Eligibility Tool"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "member_id": "={{$json.member_id}}"
+          },
+          "matchingColumns": [
+            "member_id"
+          ],
+          "schema": [
+            {
+              "id": "member_id",
+              "displayName": "member_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -600,
+        -600
+      ],
+      "id": "2c2fda97-d5a9-4eb1-8c81-bc1d835e4a50",
+      "name": "Call Eligibility Tool"
+    },
+    {
+      "parameters": {
+        "jsCode": "const definitions = {\n  M1001: {\n    test_id: 'ELIG-001',\n    expected: {\n      status: 'SUCCESS',\n      coverage_status: 'ACTIVE',\n      enrollment_status: 'ACTIVE'\n    }\n  },\n  M1003: {\n    test_id: 'ELIG-002',\n    expected: {\n      status: 'SUCCESS',\n      coverage_status: 'INACTIVE',\n      enrollment_status: 'ACTIVE'\n    }\n  },\n  M9999: {\n    test_id: 'ELIG-003',\n    expected: { status: 'NOT_FOUND' }\n  }\n};\n\nreturn $input.all().map((item) => {\n  const actual = item.json ?? {};\n  const definition = definitions[actual.member_id];\n  const failures = [];\n\n  if (!definition) {\n    failures.push('Unexpected member_id returned');\n  } else {\n    if (actual.status !== definition.expected.status) {\n      failures.push('Expected status ' + definition.expected.status + ', received ' + actual.status);\n    }\n    if (definition.expected.status === 'SUCCESS') {\n      if (actual.data?.coverage_status !== definition.expected.coverage_status) {\n        failures.push('Coverage status did not match');\n      }\n      if (actual.data?.enrollment_status !== definition.expected.enrollment_status) {\n        failures.push('Enrollment status did not match');\n      }\n    }\n  }\n\n  return {\n    json: {\n      test_id: definition?.test_id ?? 'ELIG-UNKNOWN',\n      tool: 'ELIGIBILITY',\n      passed: failures.length === 0,\n      expected: definition?.expected ?? {},\n      actual,\n      failure_reason: failures.length ? failures.join('; ') : null\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -300,
+        -600
+      ],
+      "id": "ed9afe13-637d-4628-8384-01665626bad9",
+      "name": "Assert Eligibility"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  { json: { plan_id: 'PLAN-PPO-001', service_code: 'MRI-SIM-001' } },\n  { json: { plan_id: 'PLAN-PPO-001', service_code: 'INVALID-SERVICE' } }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -900,
+        -300
+      ],
+      "id": "8b5740bc-e72a-46a2-b1ef-6a37a1d6f28a",
+      "name": "Generate Benefits Tests"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "OneCall AI - Benefits Tool"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "plan_id": "={{$json.plan_id}}",
+            "service_code": "={{$json.service_code}}"
+          },
+          "matchingColumns": [
+            "plan_id",
+            "service_code"
+          ],
+          "schema": [
+            {
+              "id": "plan_id",
+              "displayName": "plan_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "service_code",
+              "displayName": "service_code",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -600,
+        -300
+      ],
+      "id": "06d202ca-a311-4b93-9d81-87119995f1b1",
+      "name": "Call Benefits Tool"
+    },
+    {
+      "parameters": {
+        "jsCode": "const definitions = {\n  'PLAN-PPO-001|MRI-SIM-001': {\n    test_id: 'BEN-001',\n    expected: {\n      status: 'SUCCESS',\n      benefit_id: 'BEN5001',\n      covered: true,\n      prior_authorization_required: true\n    }\n  },\n  'PLAN-PPO-001|INVALID-SERVICE': {\n    test_id: 'BEN-002',\n    expected: { status: 'NOT_FOUND' }\n  }\n};\n\nreturn $input.all().map((item) => {\n  const actual = item.json ?? {};\n  const key = actual.plan_id + '|' + actual.service_code;\n  const definition = definitions[key];\n  const failures = [];\n\n  if (!definition) {\n    failures.push('Unexpected plan_id and service_code returned');\n  } else {\n    if (actual.status !== definition.expected.status) {\n      failures.push('Expected status ' + definition.expected.status + ', received ' + actual.status);\n    }\n    if (definition.expected.status === 'SUCCESS') {\n      if (actual.data?.benefit_id !== definition.expected.benefit_id) {\n        failures.push('Benefit ID did not match');\n      }\n      if (actual.data?.covered !== definition.expected.covered) {\n        failures.push('Covered flag did not match');\n      }\n      if (actual.data?.prior_authorization_required !== definition.expected.prior_authorization_required) {\n        failures.push('Prior authorization requirement did not match');\n      }\n    }\n  }\n\n  return {\n    json: {\n      test_id: definition?.test_id ?? 'BEN-UNKNOWN',\n      tool: 'BENEFITS',\n      passed: failures.length === 0,\n      expected: definition?.expected ?? {},\n      actual,\n      failure_reason: failures.length ? failures.join('; ') : null\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -300,
+        -300
+      ],
+      "id": "f54cf67c-830d-4606-aeb3-e555bfc0e38b",
+      "name": "Assert Benefits"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  { json: { member_id: 'M1001', service_code: 'MRI-SIM-001' } }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -900,
+        0
+      ],
+      "id": "f0092b06-490c-4f9f-86bf-160f3df9e366",
+      "name": "Generate Claims Tests"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "OneCall AI - Claims Tool"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "member_id": "={{$json.member_id}}",
+            "service_code": "={{$json.service_code}}"
+          },
+          "matchingColumns": [
+            "member_id",
+            "service_code"
+          ],
+          "schema": [
+            {
+              "id": "member_id",
+              "displayName": "member_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "service_code",
+              "displayName": "service_code",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -600,
+        0
+      ],
+      "id": "59eddf22-101f-4b2a-b81d-a37ea3dc9da1",
+      "name": "Call Claims Tool"
+    },
+    {
+      "parameters": {
+        "jsCode": "const definitions = {\n  'M1001|MRI-SIM-001': {\n    test_id: 'CLM-001',\n    expected: {\n      status: 'SUCCESS',\n      claim_id: 'CL9001',\n      claim_status: 'DENIED',\n      denial_reason: 'AUTHORIZATION_NOT_FOUND',\n      provider_id: 'P7001',\n      provider_location_id: 'L7102'\n    }\n  }\n};\n\nreturn $input.all().map((item) => {\n  const actual = item.json ?? {};\n  const key = actual.member_id + '|' + actual.service_code;\n  const definition = definitions[key];\n  const failures = [];\n\n  if (!definition) {\n    failures.push('Unexpected member_id and service_code returned');\n  } else {\n    if (actual.status !== definition.expected.status) {\n      failures.push('Expected status SUCCESS, received ' + actual.status);\n    }\n    if (actual.data?.claim_id !== definition.expected.claim_id) {\n      failures.push('Claim ID did not match');\n    }\n    if (actual.data?.status !== definition.expected.claim_status) {\n      failures.push('Claim status did not match');\n    }\n    if (actual.data?.denial_reason !== definition.expected.denial_reason) {\n      failures.push('Denial reason did not match');\n    }\n    if (actual.data?.provider_id !== definition.expected.provider_id) {\n      failures.push('Provider ID did not match');\n    }\n    if (actual.data?.provider_location_id !== definition.expected.provider_location_id) {\n      failures.push('Provider location ID did not match');\n    }\n  }\n\n  return {\n    json: {\n      test_id: definition?.test_id ?? 'CLM-UNKNOWN',\n      tool: 'CLAIMS',\n      passed: failures.length === 0,\n      expected: definition?.expected ?? {},\n      actual,\n      failure_reason: failures.length ? failures.join('; ') : null\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -300,
+        0
+      ],
+      "id": "bd6d4482-a839-427c-8588-acf7b3a2e7db",
+      "name": "Assert Claims"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  { json: { member_id: 'M1001', service_code: 'MRI-SIM-001', service_date: '2026-05-14' } },\n  { json: { member_id: 'M1002', service_code: 'MRI-SIM-001', service_date: '2026-06-10' } },\n  { json: { member_id: 'M1004', service_code: 'MRI-SIM-001', service_date: '2026-07-18' } }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -900,
+        300
+      ],
+      "id": "28ae4e99-a83f-4a83-855b-b1d2ffcd1a08",
+      "name": "Generate Authorization Tests"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "OneCall AI - Authorization Tool"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "member_id": "={{$json.member_id}}",
+            "service_code": "={{$json.service_code}}",
+            "service_date": "={{$json.service_date}}"
+          },
+          "matchingColumns": [
+            "member_id",
+            "service_code",
+            "service_date"
+          ],
+          "schema": [
+            {
+              "id": "member_id",
+              "displayName": "member_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "service_code",
+              "displayName": "service_code",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "service_date",
+              "displayName": "service_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -600,
+        300
+      ],
+      "id": "0b728852-1c55-4134-8873-e5c9806ad383",
+      "name": "Call Authorization Tool"
+    },
+    {
+      "parameters": {
+        "jsCode": "const definitions = {\n  'M1001|MRI-SIM-001|2026-05-14': {\n    test_id: 'AUTH-001',\n    expected: {\n      status: 'SUCCESS',\n      authorization_id: 'PA8001',\n      authorization_status: 'APPROVED',\n      provider_id: 'P7001',\n      provider_location_id: 'L7101'\n    }\n  },\n  'M1002|MRI-SIM-001|2026-06-10': {\n    test_id: 'AUTH-002',\n    expected: { status: 'NOT_FOUND' }\n  },\n  'M1004|MRI-SIM-001|2026-07-18': {\n    test_id: 'AUTH-003',\n    expected: {\n      status: 'SUCCESS',\n      authorization_id: 'PA8004',\n      authorization_status: 'APPROVED'\n    }\n  }\n};\n\nreturn $input.all().map((item) => {\n  const actual = item.json ?? {};\n  const key = actual.member_id + '|' + actual.service_code + '|' + actual.service_date;\n  const definition = definitions[key];\n  const failures = [];\n\n  if (!definition) {\n    failures.push('Unexpected authorization lookup identifiers returned');\n  } else {\n    if (actual.status !== definition.expected.status) {\n      failures.push('Expected status ' + definition.expected.status + ', received ' + actual.status);\n    }\n    if (definition.expected.status === 'SUCCESS') {\n      if (actual.data?.authorization_id !== definition.expected.authorization_id) {\n        failures.push('Authorization ID did not match');\n      }\n      if (actual.data?.status !== definition.expected.authorization_status) {\n        failures.push('Authorization status did not match');\n      }\n      if (definition.expected.provider_id && actual.data?.provider_id !== definition.expected.provider_id) {\n        failures.push('Provider ID did not match');\n      }\n      if (definition.expected.provider_location_id && actual.data?.provider_location_id !== definition.expected.provider_location_id) {\n        failures.push('Provider location ID did not match');\n      }\n    }\n  }\n\n  return {\n    json: {\n      test_id: definition?.test_id ?? 'AUTH-UNKNOWN',\n      tool: 'AUTHORIZATION',\n      passed: failures.length === 0,\n      expected: definition?.expected ?? {},\n      actual,\n      failure_reason: failures.length ? failures.join('; ') : null\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -300,
+        300
+      ],
+      "id": "a4be4627-1212-4031-9151-421461822ed9",
+      "name": "Assert Authorization"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  { json: { provider_id: 'P7001' } }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -900,
+        600
+      ],
+      "id": "cc151fc6-2a7e-48dd-8a65-349dd65e998f",
+      "name": "Generate Provider Tests"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "OneCall AI - Provider Tool"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "provider_id": "={{$json.provider_id}}"
+          },
+          "matchingColumns": [
+            "provider_id"
+          ],
+          "schema": [
+            {
+              "id": "provider_id",
+              "displayName": "provider_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -600,
+        600
+      ],
+      "id": "e0b281cf-dbe6-4890-a40b-f3e5a1ac8dfa",
+      "name": "Call Provider Tool"
+    },
+    {
+      "parameters": {
+        "jsCode": "const definitions = {\n  P7001: {\n    test_id: 'PROV-001',\n    expected: {\n      status: 'SUCCESS',\n      organization_name: 'ABC Imaging',\n      location_ids: ['L7101', 'L7102'],\n      network_status: 'IN_NETWORK'\n    }\n  }\n};\n\nreturn $input.all().map((item) => {\n  const actual = item.json ?? {};\n  const definition = definitions[actual.provider_id];\n  const failures = [];\n\n  if (!definition) {\n    failures.push('Unexpected provider_id returned');\n  } else {\n    if (actual.status !== definition.expected.status) {\n      failures.push('Expected status SUCCESS, received ' + actual.status);\n    }\n    if (actual.data?.organization_name !== definition.expected.organization_name) {\n      failures.push('Organization name did not match');\n    }\n    const locations = Array.isArray(actual.data?.locations) ? actual.data.locations : [];\n    for (const locationId of definition.expected.location_ids) {\n      const location = locations.find((record) => record.provider_location_id === locationId);\n      if (!location) {\n        failures.push('Location ' + locationId + ' was not returned');\n      } else if (location.network_status !== definition.expected.network_status) {\n        failures.push('Location ' + locationId + ' was not in network');\n      }\n    }\n  }\n\n  return {\n    json: {\n      test_id: definition?.test_id ?? 'PROV-UNKNOWN',\n      tool: 'PROVIDER',\n      passed: failures.length === 0,\n      expected: definition?.expected ?? {},\n      actual,\n      failure_reason: failures.length ? failures.join('; ') : null\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -300,
+        600
+      ],
+      "id": "1c6cd4ef-3535-4d5e-8a48-aad4eaed11a0",
+      "name": "Assert Provider"
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 5
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        100,
+        0
+      ],
+      "id": "6dcf7c60-2737-44f0-8699-aa4225173f38",
+      "name": "Merge Test Results"
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = $input.all().map((item) => item.json);\nconst expectedCounts = {\n  ELIGIBILITY: 3,\n  BENEFITS: 2,\n  CLAIMS: 1,\n  AUTHORIZATION: 3,\n  PROVIDER: 1\n};\nconst byTool = {};\n\nfor (const [tool, expectedCount] of Object.entries(expectedCounts)) {\n  const toolResults = results.filter((result) => result.tool === tool);\n  const passed = toolResults.filter((result) => result.passed === true).length;\n  const explicitFailures = toolResults.filter((result) => result.passed !== true).length;\n  const missing = Math.max(0, expectedCount - toolResults.length);\n  byTool[tool] = {\n    passed,\n    failed: explicitFailures + missing\n  };\n}\n\nconst expectedTotal = Object.values(expectedCounts).reduce((sum, count) => sum + count, 0);\nconst passed = results.filter((result) => result.passed === true).length;\nconst explicitFailures = results.filter((result) => result.passed !== true).length;\nconst missing = Math.max(0, expectedTotal - results.length);\nconst failed = explicitFailures + missing;\n\nreturn [\n  {\n    json: {\n      suite: 'OneCall AI Domain Tools',\n      status: results.length === expectedTotal && failed === 0 ? 'PASS' : 'FAIL',\n      total: expectedTotal,\n      passed,\n      failed,\n      by_tool: byTool,\n      results\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        0
+      ],
+      "id": "70476735-b092-4b3e-8c90-ab257177f1f2",
+      "name": "Build Test Summary"
+    }
+  ],
+  "connections": {
+    "When clicking 'Execute workflow'": {
+      "main": [
+        [
+          {
+            "node": "Generate Eligibility Tests",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Generate Benefits Tests",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Generate Claims Tests",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Generate Authorization Tests",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Generate Provider Tests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Eligibility Tests": {
+      "main": [
+        [
+          {
+            "node": "Call Eligibility Tool",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Eligibility Tool": {
+      "main": [
+        [
+          {
+            "node": "Assert Eligibility",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assert Eligibility": {
+      "main": [
+        [
+          {
+            "node": "Merge Test Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Benefits Tests": {
+      "main": [
+        [
+          {
+            "node": "Call Benefits Tool",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Benefits Tool": {
+      "main": [
+        [
+          {
+            "node": "Assert Benefits",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assert Benefits": {
+      "main": [
+        [
+          {
+            "node": "Merge Test Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Generate Claims Tests": {
+      "main": [
+        [
+          {
+            "node": "Call Claims Tool",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Claims Tool": {
+      "main": [
+        [
+          {
+            "node": "Assert Claims",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assert Claims": {
+      "main": [
+        [
+          {
+            "node": "Merge Test Results",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Generate Authorization Tests": {
+      "main": [
+        [
+          {
+            "node": "Call Authorization Tool",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Authorization Tool": {
+      "main": [
+        [
+          {
+            "node": "Assert Authorization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assert Authorization": {
+      "main": [
+        [
+          {
+            "node": "Merge Test Results",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Generate Provider Tests": {
+      "main": [
+        [
+          {
+            "node": "Call Provider Tool",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Provider Tool": {
+      "main": [
+        [
+          {
+            "node": "Assert Provider",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assert Provider": {
+      "main": [
+        [
+          {
+            "node": "Merge Test Results",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "Merge Test Results": {
+      "main": [
+        [
+          {
+            "node": "Build Test Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": [],
+  "tags": []
+}

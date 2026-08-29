@@ -1,0 +1,112 @@
+{
+  "name": "OneCall AI - Claims Tool",
+  "id": "c520fd96-2be5-4171-b313-979b4a440cda",
+  "versionId": "ade04ede-a28f-4f5c-a36e-28c5076556a0",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "member_id"
+            },
+            {
+              "name": "service_code"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "d7048047-5555-4fdd-8658-47fb2b446b77",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "fileSelector": "/files/data/claims.json",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        224,
+        0
+      ],
+      "id": "aefccde1-cc66-4ce8-a81a-d9756810fd6f",
+      "name": "Read Claims Data"
+    },
+    {
+      "parameters": {
+        "operation": "fromJson",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        448,
+        0
+      ],
+      "id": "9235bc90-3397-4208-9a4a-33ab20750464",
+      "name": "Parse Claims JSON"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get inputs passed into this sub-workflow\nconst triggerInput = $('When Executed by Another Workflow').first().json;\nconst memberId = triggerInput.member_id ?? null;\nconst serviceCode = triggerInput.service_code ?? null;\n\n// Parsed claims.json from the previous node\nconst claims = $input.first().json.data;\n\n// Validate input\nif (!memberId || !serviceCode) {\n  return [\n    {\n      json: {\n        tool: 'CLAIMS',\n        status: 'INVALID_INPUT',\n        member_id: memberId,\n        service_code: serviceCode,\n        data: null,\n        error: 'member_id and service_code are required'\n      }\n    }\n  ];\n}\n\n// Find the requested member claim using the nested service schema\nconst claim = claims.find(\n  (record) =>\n    record.member_id === memberId &&\n    record.service?.service_code === serviceCode\n);\n\n// Claim not found\nif (!claim) {\n  return [\n    {\n      json: {\n        tool: 'CLAIMS',\n        status: 'NOT_FOUND',\n        member_id: memberId,\n        service_code: serviceCode,\n        data: null,\n        error: 'Claim not found'\n      }\n    }\n  ];\n}\n\n// Return only fields useful to servicing\nreturn [\n  {\n    json: {\n      tool: 'CLAIMS',\n      status: 'SUCCESS',\n      member_id: claim.member_id,\n      service_code: claim.service.service_code,\n      data: {\n        claim_id: claim.claim_id,\n        service_name: claim.service.service_name,\n        service_date: claim.service_date,\n        provider_id: claim.provider_id,\n        provider_location_id: claim.provider_location_id,\n        status: claim.status,\n        denial_reason: claim.denial_reason ?? null,\n        authorization_reference:\n          claim.authorization_reference ?? null,\n        billed_amount: claim.billed_amount,\n        allowed_amount: claim.allowed_amount\n      },\n      error: null\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "id": "38e92530-0f6c-4dfd-91d4-593b32446179",
+      "name": "Lookup Member Claim"
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Read Claims Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Claims Data": {
+      "main": [
+        [
+          {
+            "node": "Parse Claims JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Claims JSON": {
+      "main": [
+        [
+          {
+            "node": "Lookup Member Claim",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": [],
+  "tags": []
+}

@@ -1,0 +1,109 @@
+{
+  "name": "OneCall AI - Provider Tool",
+  "id": "76d97017-f6eb-48b9-ab2d-5e30958efeb8",
+  "versionId": "ab51ed93-a8e3-4152-879e-648ee9f800d3",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "provider_id"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "c477d22f-ceeb-48f4-ad41-6507ed19f852",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "fileSelector": "/files/data/providers.json",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        224,
+        0
+      ],
+      "id": "cf49194f-962e-478b-be83-88812354dcb6",
+      "name": "Read Provider Data"
+    },
+    {
+      "parameters": {
+        "operation": "fromJson",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        448,
+        0
+      ],
+      "id": "57872bd7-41b5-471d-84e5-841a47dcd764",
+      "name": "Parse Provider JSON"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get provider_id passed into this sub-workflow\nconst providerId =\n  $('When Executed by Another Workflow').first().json.provider_id ?? null;\n\n// Parsed providers.json from the previous node\nconst providers = $input.first().json.data;\n\n// Validate input\nif (!providerId) {\n  return [\n    {\n      json: {\n        tool: 'PROVIDER',\n        status: 'INVALID_INPUT',\n        provider_id: providerId,\n        data: null,\n        error: 'provider_id is required'\n      }\n    }\n  ];\n}\n\n// Find the requested provider organization\nconst provider = providers.find(\n  (record) => record.provider_id === providerId\n);\n\n// Provider not found\nif (!provider) {\n  return [\n    {\n      json: {\n        tool: 'PROVIDER',\n        status: 'NOT_FOUND',\n        provider_id: providerId,\n        data: null,\n        error: 'Provider not found'\n      }\n    }\n  ];\n}\n\n// Return organization and location facts without inferring a root cause\nreturn [\n  {\n    json: {\n      tool: 'PROVIDER',\n      status: 'SUCCESS',\n      provider_id: provider.provider_id,\n      data: {\n        organization_name: provider.organization_name,\n        locations: provider.locations.map((location) => ({\n          provider_location_id: location.provider_location_id,\n          location_name: location.location_name,\n          city: location.city,\n          state: location.state,\n          network_status: location.network_status\n        }))\n      },\n      error: null\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "id": "affb2365-a6e1-4824-9d38-9d48dce454e2",
+      "name": "Lookup Provider"
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Read Provider Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Provider Data": {
+      "main": [
+        [
+          {
+            "node": "Parse Provider JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Provider JSON": {
+      "main": [
+        [
+          {
+            "node": "Lookup Provider",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": [],
+  "tags": []
+}

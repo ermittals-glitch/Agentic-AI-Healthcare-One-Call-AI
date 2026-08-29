@@ -1,0 +1,112 @@
+{
+  "name": "OneCall AI - Benefits Tool",
+  "id": "e0192bc6-59b1-4ff0-a6b7-ba0cd738029e",
+  "versionId": "fb2ad2d7-67ac-453d-bab7-3b932db90d37",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "plan_id"
+            },
+            {
+              "name": "service_code"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "621b07c0-3a0f-44f7-93cc-f14c242904fa",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "fileSelector": "/files/data/benefits.json",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        224,
+        0
+      ],
+      "id": "4a59d8bd-dda0-4a4f-8678-f650888e5838",
+      "name": "Read Benefits Data"
+    },
+    {
+      "parameters": {
+        "operation": "fromJson",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        448,
+        0
+      ],
+      "id": "8592b6db-d056-442b-96c4-06a4cc6e99b7",
+      "name": "Parse Benefits JSON"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get inputs passed into this sub-workflow\nconst triggerInput = $('When Executed by Another Workflow').first().json;\nconst planId = triggerInput.plan_id ?? null;\nconst serviceCode = triggerInput.service_code ?? null;\n\n// Parsed benefits.json from the previous node\nconst benefits = $input.first().json.data;\n\n// Validate input\nif (!planId || !serviceCode) {\n  return [\n    {\n      json: {\n        tool: 'BENEFITS',\n        status: 'INVALID_INPUT',\n        plan_id: planId,\n        service_code: serviceCode,\n        data: null,\n        error: 'plan_id and service_code are required'\n      }\n    }\n  ];\n}\n\n// Find the requested plan benefit\nconst benefit = benefits.find(\n  (record) =>\n    record.plan_id === planId &&\n    record.service_code === serviceCode\n);\n\n// Benefit not found\nif (!benefit) {\n  return [\n    {\n      json: {\n        tool: 'BENEFITS',\n        status: 'NOT_FOUND',\n        plan_id: planId,\n        service_code: serviceCode,\n        data: null,\n        error: 'Benefit not found'\n      }\n    }\n  ];\n}\n\n// Return only fields useful to servicing\nreturn [\n  {\n    json: {\n      tool: 'BENEFITS',\n      status: 'SUCCESS',\n      plan_id: benefit.plan_id,\n      service_code: benefit.service_code,\n      data: {\n        benefit_id: benefit.benefit_id,\n        service_name: benefit.service_name,\n        covered: benefit.covered,\n        prior_authorization_required:\n          benefit.prior_authorization_required,\n        network_requirement: benefit.network_requirement\n      },\n      error: null\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "id": "74143b39-9731-472e-994b-64fb4c2909a5",
+      "name": "Lookup Plan Benefit"
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Read Benefits Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Benefits Data": {
+      "main": [
+        [
+          {
+            "node": "Parse Benefits JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Benefits JSON": {
+      "main": [
+        [
+          {
+            "node": "Lookup Plan Benefit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": [],
+  "tags": []
+}
