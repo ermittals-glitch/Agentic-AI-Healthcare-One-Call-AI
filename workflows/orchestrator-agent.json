@@ -1,0 +1,185 @@
+{
+  "name": "OneCall AI - Orchestrator Agent",
+  "id": "0a008c40-222e-4dcc-ac73-86d025653572",
+  "versionId": "614b79cc-6f7d-4ff1-961c-52b507ad1500",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "case_state",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -720,
+        0
+      ],
+      "id": "7cd79d83-074b-4d97-bf4f-3dedde698ee1",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "91dd160a-5485-48a4-aacc-3e87af8910fc",
+              "name": "nebius_endpoint",
+              "value": "https://api.tokenfactory.nebius.com/v1/chat/completions",
+              "type": "string"
+            },
+            {
+              "id": "cb9dd3f9-2576-4635-bdbc-b0cce31dfb7c",
+              "name": "nebius_model",
+              "value": "={{$env.NEBIUS_MODEL}}",
+              "type": "string"
+            },
+            {
+              "id": "fd694fe0-1ec2-4b12-89b9-6cdc79982caf",
+              "name": "temperature",
+              "value": 0,
+              "type": "number"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -500,
+        0
+      ],
+      "id": "20aef06c-e54c-414c-968b-d8a8fc04d9f9",
+      "name": "Agent Configuration"
+    },
+    {
+      "parameters": {
+        "jsCode": "let state = $json.case_state;\nif (typeof state === 'string') {\n  try { state = JSON.parse(state); } catch (error) {\n    state = { workflow_status: 'HUMAN_ESCALATION', input_error: error.message };\n  }\n}\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\nconst endpointHost = String($json.nebius_endpoint ?? '').replace(/^https?:\\/\\//, '').split('/')[0] || null;\naddTrace(state, 'ORCHESTRATOR', 'NEBIUS_REQUEST_PREPARED', 'OK', {\n  model_configured: Boolean(String($json.nebius_model ?? '').trim()),\n  auth_configured: Boolean(String($env.NEBIUS_API_KEY ?? '').trim()),\n  endpoint_host: endpointHost,\n  temperature: Number($json.temperature ?? 0),\n  reasoning_effort: 'low',\n  max_completion_tokens: 1200,\n  response_format_type: 'json_object',\n  message_count: 2,\n  request_body_keys: ['model', 'temperature', 'reasoning_effort', 'max_completion_tokens', 'response_format', 'messages']\n});\nconst promptState = JSON.parse(JSON.stringify(state));\ndelete promptState.debug_trace;\ndelete promptState.debug_trace_enabled;\nconst systemPrompt = \"You coordinate a healthcare payer member servicing investigation. Use only facts already present in case_state. Never invent payer facts. Choose exactly one minimum next decision from: CHECK_ELIGIBILITY, CHECK_BENEFITS, CHECK_CLAIMS, CHECK_AUTHORIZATION, CHECK_AUTHORIZATION_ALTERNATE, CHECK_PROVIDER, RESOLVE, HUMAN_ESCALATION. Do not repeat a successful tool call unless a documented recovery condition requires it. Treat deterministic NOT_FOUND as conclusive evidence, not a retryable error. Do not repeat the same deterministic lookup after SUCCESS or NOT_FOUND. When authorization is NOT_FOUND for an inquiry about a prior-authorization denial, choose RESOLVE without checking Provider. Check eligibility first when unknown. Check benefits when coverage rules matter. Check claims for claim inquiries. Check authorization when prior authorization is required, a claim denial references authorization, or the inquiry concerns authorization. For SCN004, after one simulated authorization error retry with CHECK_AUTHORIZATION; after two errors choose CHECK_AUTHORIZATION_ALTERNATE. Check provider only when provider/network facts are needed or claim and authorization provider/location evidence conflicts. Before RESOLVE, if successful claim and authorization evidence conflict on provider or location and provider evidence is still unknown, choose CHECK_PROVIDER. For an INACTIVE coverage result with ACTIVE enrollment and stale synchronization evidence, do not call claims, authorization, or provider; resolve the eligibility mismatch. If enough evidence exists choose RESOLVE. If evidence cannot be safely obtained after allowed retries choose HUMAN_ESCALATION. Never diagnose, recommend treatment, perform a payer write, or select an arbitrary tool. Return JSON only with keys agent, status, decision, reason, required_inputs, error.\";\nreturn [{\n  json: {\n    ...$json,\n    case_state: state,\n    request_body: {\n      model: $json.nebius_model,\n      temperature: Number($json.temperature ?? 0),\n      reasoning_effort: 'low',\n      max_completion_tokens: 1200,\n      response_format: { type: 'json_object' },\n      messages: [\n        { role: 'system', content: systemPrompt },\n        { role: 'user', content: 'Current case_state:\\n' + JSON.stringify(promptState) }\n      ]\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -260,
+        0
+      ],
+      "id": "d70bdf72-ba01-4452-bfe5-7226f9f67674",
+      "name": "Build Orchestrator Request"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$json.nebius_endpoint}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept-Encoding",
+              "value": "identity"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.NEBIUS_API_KEY}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.request_body) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "autodetect"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "5b2fdf13-4a2f-4e1d-9813-46c68cbfb50d",
+      "name": "Nebius Orchestrator Inference",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const buildContext = $('Build Orchestrator Request').first().json;\nconst state = JSON.parse(JSON.stringify(buildContext.case_state));\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\nconst allowed = new Set([\n  'CHECK_ELIGIBILITY', 'CHECK_BENEFITS', 'CHECK_CLAIMS',\n  'CHECK_AUTHORIZATION', 'CHECK_AUTHORIZATION_ALTERNATE',\n  'CHECK_PROVIDER', 'RESOLVE', 'HUMAN_ESCALATION'\n]);\nlet diagnostic = null;\nconst hasOwn = (value, key) => Boolean(\n  value && typeof value === 'object' && Object.prototype.hasOwnProperty.call(value, key)\n);\nconst normalizeContent = (value) => {\n  if (typeof value === 'string') return value.trim() ? value : null;\n  if (value && typeof value === 'object' && !Array.isArray(value)) return value;\n  if (!Array.isArray(value) || value.length === 0) return null;\n  const textParts = [];\n  for (const part of value) {\n    if (typeof part === 'string') {\n      textParts.push(part);\n      continue;\n    }\n    if (!part || typeof part !== 'object' || Array.isArray(part)) return null;\n    const keys = Object.keys(part);\n    const explicitTextPart = (\n      typeof part.text === 'string' &&\n      (part.type === 'text' || part.type === 'output_text') &&\n      keys.every(key => key === 'type' || key === 'text')\n    );\n    if (!explicitTextPart) return null;\n    textParts.push(part.text);\n  }\n  const joined = textParts.join('').trim();\n  return joined || null;\n};\ntry {\n  const received = $input.first().json;\n  let normalizationPath = 'DIRECT';\n  let response = received;\n  if (received?.body !== null && received?.body !== undefined) { response = received.body; normalizationPath = 'BODY'; }\n  else if (received?.data !== null && received?.data !== undefined) { response = received.data; normalizationPath = 'DATA'; }\n  else if (received?.response !== null && received?.response !== undefined) { response = received.response; normalizationPath = 'RESPONSE'; }\n  else if (received?.json !== null && received?.json !== undefined) { response = received.json; normalizationPath = 'JSON'; }\n  if (typeof response === 'string') {\n    const trimmedResponse = response.trim();\n    if (trimmedResponse.startsWith('{') || trimmedResponse.startsWith('[')) {\n      try { response = JSON.parse(trimmedResponse); normalizationPath += '+STRING_PARSED'; } catch (error) {}\n    }\n  }\n  if (Array.isArray(response) && response.length === 1 && response[0] && typeof response[0] === 'object') {\n    response = response[0];\n    normalizationPath += '+ARRAY_FIRST_ITEM';\n  }\n  const responseIsObject = Boolean(response && typeof response === 'object' && !Array.isArray(response));\n  const choices = responseIsObject && Array.isArray(response.choices) ? response.choices : [];\n  const choice = choices[0];\n  const message = choice && typeof choice.message === 'object' && !Array.isArray(choice.message) ? choice.message : null;\n  const messageContentPresent = hasOwn(message, 'content') && message.content !== null && message.content !== undefined;\n  const messageContent = messageContentPresent ? normalizeContent(message.content) : null;\n  const textPresent = hasOwn(choice, 'text') && choice.text !== null && choice.text !== undefined;\n  const fallbackContent = !messageContentPresent && textPresent ? normalizeContent(choice.text) : null;\n  const content = messageContent ?? fallbackContent;\n  const contentType = content === null ? 'missing' : (Array.isArray(content) ? 'array' : typeof content);\n  const contentLength = typeof content === 'string' ? content.length : null;\n  const contentSource = messageContent !== null\n    ? (Array.isArray(message?.content) ? 'TEXT_ARRAY' : (typeof message?.content === 'object' ? 'OBJECT_CONTENT' : 'MESSAGE_CONTENT'))\n    : (fallbackContent !== null ? 'CHOICE_TEXT' : null);\n  const valueType = (value) => value === null ? 'null' : (Array.isArray(value) ? 'array' : typeof value);\n  const objectKeys = (value) => value && typeof value === 'object' && !Array.isArray(value) ? Object.keys(value).sort() : [];\n  const usage = responseIsObject && response.usage && typeof response.usage === 'object' ? response.usage : null;\n  diagnostic = {\n    normalization_path: normalizationPath,\n    value_type: valueType(received),\n    top_level_keys: objectKeys(received),\n    has_body: hasOwn(received, 'body'), body_type: valueType(received?.body), body_keys: objectKeys(received?.body),\n    has_data: hasOwn(received, 'data'), data_type: valueType(received?.data), data_keys: objectKeys(received?.data),\n    has_response: hasOwn(received, 'response'), response_type: valueType(received?.response), response_keys_wrapper: objectKeys(received?.response),\n    has_json: hasOwn(received, 'json'), json_type: valueType(received?.json), json_keys: objectKeys(received?.json),\n    normalized_type: valueType(response), normalized_keys: objectKeys(response),\n    http_status_if_available: Number(received?.statusCode ?? received?.status ?? 0) || null,\n    has_choices: choices.length > 0, choices_count: choices.length,\n    first_choice_keys: objectKeys(choice), finish_reason: choice && typeof choice.finish_reason === 'string' ? choice.finish_reason : null,\n    has_message: Boolean(message), message_keys: objectKeys(message),\n    content_exists: content !== null, content_type: contentType, content_length: contentLength,\n    has_choice_text: textPresent, choice_text_type: valueType(choice?.text), choice_text_length: typeof choice?.text === 'string' ? choice.text.length : null,\n    has_reasoning_content: hasOwn(message, 'reasoning_content') || hasOwn(choice, 'reasoning_content'),\n    usage_present: Boolean(usage),\n    prompt_tokens_if_available: Number(usage?.prompt_tokens ?? 0) || null,\n    completion_tokens_if_available: Number(usage?.completion_tokens ?? 0) || null,\n    total_tokens_if_available: Number(usage?.total_tokens ?? 0) || null\n  };\n  addTrace(state, 'NEBIUS_HTTP', 'ORCHESTRATOR_HTTP_RESPONSE', responseIsObject && !hasOwn(response, 'error') ? 'OK' : 'ERROR', diagnostic);\n  addTrace(state, 'PARSER', 'ORCHESTRATOR_PARSER_INPUT_NORMALIZED', responseIsObject ? 'OK' : 'ERROR', { normalization_path: normalizationPath, value_type: diagnostic.value_type, normalized_type: diagnostic.normalized_type, normalized_keys: diagnostic.normalized_keys });\n  addTrace(state, 'PARSER', 'ORCHESTRATOR_FINAL_CONTENT_LOCATED', content === null ? 'ERROR' : 'OK', { source: contentSource, content_type: contentType, content_length: contentLength });\n  if (responseIsObject && hasOwn(response, 'error')) throw new Error('Nebius API returned an error response.');\n  if (content === null) throw new Error('Nebius response did not contain usable final content.');\n  let parsed;\n  if (content && typeof content === 'object' && !Array.isArray(content)) {\n    parsed = content;\n  } else if (typeof content === 'string') {\n    let cleaned = content.trim();\n    const fence = String.fromCharCode(96).repeat(3);\n    if (cleaned.toLowerCase().startsWith(fence + 'json')) {\n      cleaned = cleaned.slice(fence.length + 4).trim();\n      if (cleaned.endsWith(fence)) cleaned = cleaned.slice(0, -fence.length).trim();\n    }\n    try {\n      parsed = JSON.parse(cleaned);\n    } catch (error) {\n      addTrace(state, 'PARSER', 'ORCHESTRATOR_JSON_PARSE_RESULT', 'ERROR', { success: false, parsed_keys: [], parse_error_type: 'SYNTAX_ERROR' });\n      throw new Error('Nebius final content was not valid JSON.');\n    }\n  } else {\n    throw new Error('Nebius response did not contain usable final content.');\n  }\n  addTrace(state, 'PARSER', 'ORCHESTRATOR_JSON_PARSE_RESULT', 'OK', { success: true, parsed_keys: parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? Object.keys(parsed).sort() : [], parse_error_type: null });\n  const decisionValid = allowed.has(parsed.decision);\n  addTrace(state, 'PARSER', 'ORCHESTRATOR_ENUM_VALIDATION', decisionValid ? 'OK' : 'ERROR', { decision: typeof parsed.decision === 'string' ? parsed.decision : null, valid: decisionValid });\n  if (!decisionValid) throw new Error('Invalid orchestrator decision: ' + String(parsed.decision));\n  if (typeof parsed.reason !== 'string' || !parsed.reason.trim()) throw new Error('Orchestrator reason is required.');\n  const requiredInputs = parsed.required_inputs && typeof parsed.required_inputs === 'object' && !Array.isArray(parsed.required_inputs) ? parsed.required_inputs : {};\n  return [{ json: { agent: 'ORCHESTRATOR', status: 'SUCCESS', debug_trace: state.debug_trace, decision: parsed.decision, reason: parsed.reason, required_inputs: requiredInputs, error: null } }];\n} catch (error) {\n  const errorCategory = error.message.startsWith('Nebius API') ? 'API_ERROR' : error.message.includes('usable final content') ? 'FINAL_CONTENT_MISSING' : error.message.includes('valid JSON') ? 'JSON_PARSE_FAILED' : error.message.startsWith('Invalid ') ? 'ENUM_VALIDATION_FAILED' : 'OUTPUT_VALIDATION_FAILED';\n  addTrace(state, 'PARSER', 'ORCHESTRATOR_PARSE_FAILURE', 'ERROR', { error_category: errorCategory, diagnostic_available: Boolean(diagnostic) });\n  return [{ json: { agent: 'ORCHESTRATOR', status: 'ERROR', debug_trace: state.debug_trace, decision: 'HUMAN_ESCALATION', reason: 'Unable to parse orchestrator decision.', required_inputs: {}, error: error.message + (diagnostic ? ' Diagnostic: ' + JSON.stringify(diagnostic) : ''), diagnostic } }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ],
+      "id": "941536f6-96fa-4c69-a24f-ee55855b3714",
+      "name": "Parse Orchestrator Decision"
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Agent Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent Configuration": {
+      "main": [
+        [
+          {
+            "node": "Build Orchestrator Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Orchestrator Request": {
+      "main": [
+        [
+          {
+            "node": "Nebius Orchestrator Inference",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nebius Orchestrator Inference": {
+      "main": [
+        [
+          {
+            "node": "Parse Orchestrator Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": [],
+  "tags": []
+}

@@ -126,7 +126,11 @@ $expectedWorkflowFiles = @(
     "claims-tool.json",
     "authorization-tool.json",
     "provider-tool.json",
-    "domain-tools-automated-test-harness.json"
+    "domain-tools-automated-test-harness.json",
+    "orchestrator-agent.json",
+    "resolution-agent.json",
+    "main-orchestrator.json",
+    "orchestrator-evaluation.json"
 )
 $workflowMountAvailable = $false
 if ($containerRunning) {

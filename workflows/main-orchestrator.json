@@ -1,0 +1,1587 @@
+{
+  "name": "OneCall AI - Main Orchestrator",
+  "id": "41adbefe-7314-4c67-b9d7-34b86ceee453",
+  "versionId": "96c4fa85-681d-46f8-8aae-ba076cbaf566",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "scenario_id",
+              "type": "string"
+            },
+            {
+              "name": "member_id",
+              "type": "string"
+            },
+            {
+              "name": "member_inquiry",
+              "type": "string"
+            },
+            {
+              "name": "service_code",
+              "type": "string"
+            },
+            {
+              "name": "service_date",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1800,
+        0
+      ],
+      "id": "7a11ddc8-637e-414c-aa95-cbaa87db0881",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst scenarioId = String(input.scenario_id ?? '').trim();\nconst memberId = String(input.member_id ?? '').trim();\nconst debugTraceEnabled = ['1', 'true', 'yes', 'on'].includes(String($env.ONECALL_DEBUG_TRACE ?? 'false').trim().toLowerCase());\nconst state = {\n  case_id: 'CASE-' + (scenarioId || 'UNKNOWN') + '-' + (memberId || 'UNKNOWN'),\n  scenario_id: scenarioId,\n  member_id: memberId,\n  member_inquiry: String(input.member_inquiry ?? ''),\n  service_code: String(input.service_code ?? '').trim() || null,\n  service_date: String(input.service_date ?? '').trim() || null,\n  plan_id: null,\n  workflow_status: 'INVESTIGATING',\n  iteration: 0,\n  max_iterations: 8,\n  eligibility: null,\n  benefits: null,\n  claim: null,\n  authorization: null,\n  provider: null,\n  agents_called: [],\n  tool_calls: [],\n  tool_errors: [],\n  authorization_attempt_count: 0,\n  authorization_alternate_used: false,\n  root_cause: null,\n  recommended_action: null,\n  member_transfer_required: 'UNKNOWN',\n  human_approval_required: false,\n  human_handoff_reason: null,\n  final_resolution: null,\n  debug_trace_enabled: debugTraceEnabled,\n  debug_trace: []\n};\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\naddTrace(state, 'MAIN', 'CASE_INITIALIZED', 'OK', {\n  scenario_id: state.scenario_id,\n  member_id: state.member_id,\n  service_code: state.service_code,\n  service_date: state.service_date,\n  max_iterations: state.max_iterations\n});\nreturn [{ json: { case_state: state } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1580,
+        0
+      ],
+      "id": "62d82fb8-984f-4e17-9124-9129d1becb93",
+      "name": "Initialize Case State"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = JSON.parse(JSON.stringify($json.case_state));\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\nstate.iteration = Number(state.iteration ?? 0) + 1;\naddTrace(state, 'MAIN', 'ITERATION_STARTED', 'START', {\n  iteration: state.iteration,\n  workflow_status: state.workflow_status\n});\naddTrace(state, 'MAIN', 'ORCHESTRATOR_CALL_START', 'START', {\n  iteration: state.iteration,\n  has_eligibility: Boolean(state.eligibility),\n  has_benefits: Boolean(state.benefits),\n  has_claim: Boolean(state.claim),\n  has_authorization: Boolean(state.authorization),\n  has_provider: Boolean(state.provider)\n});\nconst guardExceeded = state.iteration > 8;\nif (guardExceeded) {\n  state.workflow_status = 'HUMAN_ESCALATION';\n  state.human_approval_required = true;\n  state.human_handoff_reason = 'Maximum orchestration iterations exceeded.';\n  addTrace(state, 'MAIN', 'MAX_ITERATION_REACHED', 'ERROR', {\n    max_iterations: Number(state.max_iterations ?? 8)\n  });\n}\nreturn [{ json: { case_state: state, guard_exceeded: guardExceeded } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1360,
+        0
+      ],
+      "id": "1cc1d801-2efb-4a55-8ca5-c092397f1de8",
+      "name": "Iteration Guard"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "be96d130-4a93-4b61-8c09-0d371e290f16",
+              "leftValue": "={{$json.guard_exceeded}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1140,
+        -180
+      ],
+      "id": "fa8e3e8c-3412-4d64-8f38-b4b25f24b3fe",
+      "name": "Max Iterations Exceeded?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = JSON.parse(JSON.stringify($json.case_state));\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\nstate.workflow_status = 'HUMAN_REVIEW_REQUIRED';\nstate.human_approval_required = true;\nstate.human_handoff_reason = state.human_handoff_reason || 'Maximum orchestration iterations exceeded.';\naddTrace(state, 'MAIN', 'HUMAN_ESCALATION', 'ERROR', { reason: state.human_handoff_reason });\nreturn [{ json: state }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -900,
+        -360
+      ],
+      "id": "fc2949fe-0d1c-45a3-baf1-00f29cc4a10b",
+      "name": "Finalize Iteration Escalation"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "0a008c40-222e-4dcc-ac73-86d025653572",
+          "mode": "list",
+          "cachedResultName": "OneCall AI - Orchestrator Agent"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "case_state": "={{ JSON.stringify($json.case_state) }}"
+          },
+          "matchingColumns": [
+            "case_state"
+          ],
+          "schema": [
+            {
+              "id": "case_state",
+              "displayName": "case_state",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -900,
+        0
+      ],
+      "id": "bd9de35f-d2d9-4ba3-b1c2-18949a6c0169",
+      "name": "Call Orchestrator Agent"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = JSON.parse(JSON.stringify($('Iteration Guard').item.json.case_state));\nconst response = $input.first().json;\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\nif (state.debug_trace_enabled && Array.isArray(response.debug_trace)) {\n  state.debug_trace = JSON.parse(JSON.stringify(response.debug_trace));\n}\nstate.agents_called.push('ORCHESTRATOR');\nlet decision = response.decision;\nlet reason = response.reason;\naddTrace(state, 'ORCHESTRATOR', 'ORCHESTRATOR_DECISION_RECEIVED', response.status === 'SUCCESS' ? 'SUCCESS' : 'ERROR', {\n  decision: typeof response.decision === 'string' ? response.decision : null,\n  status: typeof response.status === 'string' ? response.status : null,\n  reason: typeof response.reason === 'string' ? response.reason : null,\n  required_input_keys: response.required_inputs && typeof response.required_inputs === 'object' ? Object.keys(response.required_inputs).sort() : []\n});\nif (response.status !== 'SUCCESS') {\n  decision = 'HUMAN_ESCALATION';\n  reason = response.reason || 'Orchestrator agent output was invalid.';\n  state.tool_errors.push({ tool: 'ORCHESTRATOR', attempt: state.iteration, error: response.error || reason });\n}\nstate.last_orchestrator_decision = { decision, reason, iteration: state.iteration };\naddTrace(state, 'ROUTER', 'ROUTE_SELECTED', response.status === 'SUCCESS' ? 'OK' : 'ERROR', { decision, target: decision });\nreturn [{ json: { case_state: state, decision, reason, required_inputs: response.required_inputs || {} } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -660,
+        0
+      ],
+      "id": "b4a9eb1c-7a00-4b31-b385-166b4acae98d",
+      "name": "Apply Orchestrator Decision"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "a4115aee-bf04-407c-a142-b5fd06f24520",
+                    "leftValue": "={{$json.decision}}",
+                    "rightValue": "CHECK_ELIGIBILITY",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "CHECK_ELIGIBILITY"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "a97f95d6-9b55-4134-99d4-87da5955953c",
+                    "leftValue": "={{$json.decision}}",
+                    "rightValue": "CHECK_BENEFITS",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "CHECK_BENEFITS"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "ca9e64c3-df34-415d-b68b-d2b7dfedbecb",
+                    "leftValue": "={{$json.decision}}",
+                    "rightValue": "CHECK_CLAIMS",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "CHECK_CLAIMS"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "60b0307c-0416-4ea1-8cd6-e63966fa26a6",
+                    "leftValue": "={{$json.decision}}",
+                    "rightValue": "CHECK_AUTHORIZATION",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "CHECK_AUTHORIZATION"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "ae078142-d2e9-4397-8251-af986ffe2b23",
+                    "leftValue": "={{$json.decision}}",
+                    "rightValue": "CHECK_AUTHORIZATION_ALTERNATE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "CHECK_AUTHORIZATION_ALTERNATE"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "7cf93a14-c767-4e61-a2b4-4bd94752eeac",
+                    "leftValue": "={{$json.decision}}",
+                    "rightValue": "CHECK_PROVIDER",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "CHECK_PROVIDER"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "5b570627-a037-4cda-9b4d-00a4f7e87ffd",
+                    "leftValue": "={{$json.decision}}",
+                    "rightValue": "RESOLVE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "RESOLVE"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "a4a5477f-9a37-4e6a-801c-630f26e52469",
+                    "leftValue": "={{$json.decision}}",
+                    "rightValue": "HUMAN_ESCALATION",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "HUMAN_ESCALATION"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -420,
+        0
+      ],
+      "id": "4a34366f-47aa-4c35-8bd7-4db9a6b82f66",
+      "name": "Decision Router"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = JSON.parse(JSON.stringify($json.case_state));\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\naddTrace(state, 'MAIN', 'DOMAIN_TOOL_START', 'STARTED', { tool: 'ELIGIBILITY', input_flags: { member_id_present: Boolean(state.member_id) } });\nreturn [{ json: { case_state: state, member_id: state.member_id } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -120,
+        -840
+      ],
+      "id": "b49a53e3-af0e-4499-b515-242cc7cc966e",
+      "name": "Prepare Eligibility Input"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "CqgfaCdp1DduH3OB",
+          "mode": "list",
+          "cachedResultName": "OneCall AI - Eligibility Tool"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "member_id": "={{$json.member_id}}"
+          },
+          "matchingColumns": [
+            "member_id"
+          ],
+          "schema": [
+            {
+              "id": "member_id",
+              "displayName": "member_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        140,
+        -840
+      ],
+      "id": "2da5d21b-ba26-42bd-94a6-37077c1cc4d1",
+      "name": "Call Eligibility Tool"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = JSON.parse(JSON.stringify($('Prepare Eligibility Input').item.json.case_state));\nconst result = $input.first().json;\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\nstate.eligibility = result;\nif (result.status === 'SUCCESS' && result.data?.plan_id) state.plan_id = result.data.plan_id;\nstate.agents_called.push('ELIGIBILITY');\nstate.tool_calls.push({ tool: 'ELIGIBILITY', status: result.status || 'ERROR', iteration: state.iteration });\nif (result.status === 'ERROR' || result.status === 'INVALID_INPUT') state.tool_errors.push({ tool: 'ELIGIBILITY', attempt: 1, error: result.error || 'Eligibility tool error' });\nconst resultStatus = typeof result.status === 'string' ? result.status : 'ERROR';\naddTrace(state, 'MAIN', 'DOMAIN_TOOL_RESULT', resultStatus === 'SUCCESS' ? 'OK' : (resultStatus === 'NOT_FOUND' ? 'WARN' : 'ERROR'), { tool: 'ELIGIBILITY', returned_status: resultStatus });\naddTrace(state, 'MAIN', 'STATE_UPDATED', 'SUCCESS', { updated_fields: [\"eligibility\",\"plan_id\"] });\nreturn [{ json: { case_state: state } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        -840
+      ],
+      "id": "2b77bd50-f4ac-4290-ba0f-007dbb8f82d3",
+      "name": "Update Eligibility State"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = JSON.parse(JSON.stringify($json.case_state));\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\naddTrace(state, 'MAIN', 'DOMAIN_TOOL_START', 'STARTED', { tool: 'BENEFITS', input_flags: { plan_id_present: Boolean(state.plan_id), service_code_present: Boolean(state.service_code) } });\nreturn [{ json: { case_state: state, plan_id: state.plan_id, service_code: state.service_code } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -120,
+        -600
+      ],
+      "id": "b3fb26ea-1eec-4e8e-803c-0e139ff597fd",
+      "name": "Prepare Benefits Input"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "e0192bc6-59b1-4ff0-a6b7-ba0cd738029e",
+          "mode": "list",
+          "cachedResultName": "OneCall AI - Benefits Tool"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "plan_id": "={{$json.plan_id}}",
+            "service_code": "={{$json.service_code}}"
+          },
+          "matchingColumns": [
+            "plan_id",
+            "service_code"
+          ],
+          "schema": [
+            {
+              "id": "plan_id",
+              "displayName": "plan_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "service_code",
+              "displayName": "service_code",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        140,
+        -600
+      ],
+      "id": "114db76e-c22a-40b7-9063-8c20532c6f9c",
+      "name": "Call Benefits Tool"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = JSON.parse(JSON.stringify($('Prepare Benefits Input').item.json.case_state));\nconst result = $input.first().json;\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\nstate.benefits = result;\nstate.agents_called.push('BENEFITS');\nstate.tool_calls.push({ tool: 'BENEFITS', status: result.status || 'ERROR', iteration: state.iteration });\nif (result.status === 'ERROR' || result.status === 'INVALID_INPUT') state.tool_errors.push({ tool: 'BENEFITS', attempt: 1, error: result.error || 'Benefits tool error' });\nconst resultStatus = typeof result.status === 'string' ? result.status : 'ERROR';\naddTrace(state, 'MAIN', 'DOMAIN_TOOL_RESULT', resultStatus === 'SUCCESS' ? 'OK' : (resultStatus === 'NOT_FOUND' ? 'WARN' : 'ERROR'), { tool: 'BENEFITS', returned_status: resultStatus });\naddTrace(state, 'MAIN', 'STATE_UPDATED', 'SUCCESS', { updated_fields: [\"benefits\"] });\nreturn [{ json: { case_state: state } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        -600
+      ],
+      "id": "5f7a4378-1911-48a7-a475-1fa8cc1cb654",
+      "name": "Update Benefits State"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = JSON.parse(JSON.stringify($json.case_state));\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\naddTrace(state, 'MAIN', 'DOMAIN_TOOL_START', 'STARTED', { tool: 'CLAIMS', input_flags: { member_id_present: Boolean(state.member_id), service_code_present: Boolean(state.service_code) } });\nreturn [{ json: { case_state: state, member_id: state.member_id, service_code: state.service_code } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -120,
+        -360
+      ],
+      "id": "ea73b2f4-c386-4f1f-b42c-c475b6f8164c",
+      "name": "Prepare Claims Input"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "c520fd96-2be5-4171-b313-979b4a440cda",
+          "mode": "list",
+          "cachedResultName": "OneCall AI - Claims Tool"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "member_id": "={{$json.member_id}}",
+            "service_code": "={{$json.service_code}}"
+          },
+          "matchingColumns": [
+            "member_id",
+            "service_code"
+          ],
+          "schema": [
+            {
+              "id": "member_id",
+              "displayName": "member_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "service_code",
+              "displayName": "service_code",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        140,
+        -360
+      ],
+      "id": "3d78317a-961e-4444-ab39-ccfe703a3a0a",
+      "name": "Call Claims Tool"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = JSON.parse(JSON.stringify($('Prepare Claims Input').item.json.case_state));\nconst result = $input.first().json;\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\nstate.claim = result;\nif (!state.service_date && result.status === 'SUCCESS' && result.data?.service_date) state.service_date = result.data.service_date;\nstate.agents_called.push('CLAIMS');\nstate.tool_calls.push({ tool: 'CLAIMS', status: result.status || 'ERROR', iteration: state.iteration });\nif (result.status === 'ERROR' || result.status === 'INVALID_INPUT') state.tool_errors.push({ tool: 'CLAIMS', attempt: 1, error: result.error || 'Claims tool error' });\nconst resultStatus = typeof result.status === 'string' ? result.status : 'ERROR';\naddTrace(state, 'MAIN', 'DOMAIN_TOOL_RESULT', resultStatus === 'SUCCESS' ? 'OK' : (resultStatus === 'NOT_FOUND' ? 'WARN' : 'ERROR'), { tool: 'CLAIMS', returned_status: resultStatus });\naddTrace(state, 'MAIN', 'STATE_UPDATED', 'SUCCESS', { updated_fields: [\"claim\",\"service_date\"] });\nreturn [{ json: { case_state: state } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        -360
+      ],
+      "id": "b41b7732-22c6-4e78-b1cd-12d8060c18df",
+      "name": "Update Claims State"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = JSON.parse(JSON.stringify($json.case_state));\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\nlet authorization_route = 'ACTUAL_LOOKUP';\nif (state.scenario_id === 'SCN004') {\n  if (Number(state.authorization_attempt_count ?? 0) === 0) authorization_route = 'SIMULATED_PRIMARY_FAILURE';\n  else if (Number(state.authorization_attempt_count ?? 0) === 1) authorization_route = 'SIMULATED_RETRY_FAILURE';\n  else authorization_route = 'ALTERNATE_REQUIRED';\n  const recoveryEvent = authorization_route === 'SIMULATED_PRIMARY_FAILURE'\n    ? 'AUTH_PRIMARY_ATTEMPT_1'\n    : authorization_route === 'SIMULATED_RETRY_FAILURE'\n      ? 'AUTH_PRIMARY_ATTEMPT_2'\n      : 'AUTH_ALTERNATE_SELECTED';\n  addTrace(state, 'AUTHORIZATION', recoveryEvent, authorization_route === 'ALTERNATE_REQUIRED' ? 'OK' : 'START', {\n    authorization_route,\n    prior_attempt_count: Number(state.authorization_attempt_count ?? 0)\n  });\n}\nreturn [{ json: { case_state: state, authorization_route } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -120,
+        -120
+      ],
+      "id": "b3334764-19fa-4601-8595-c3e2e2ffb0a5",
+      "name": "Plan Authorization Attempt"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "277f68b6-c793-4a72-80f7-9b869fb56349",
+                    "leftValue": "={{$json.authorization_route}}",
+                    "rightValue": "SIMULATED_PRIMARY_FAILURE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "SIMULATED_PRIMARY_FAILURE"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c4753501-20e4-4497-a2aa-d0097142b315",
+                    "leftValue": "={{$json.authorization_route}}",
+                    "rightValue": "SIMULATED_RETRY_FAILURE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "SIMULATED_RETRY_FAILURE"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "0e6cb11f-520e-41db-84c3-767b26651668",
+                    "leftValue": "={{$json.authorization_route}}",
+                    "rightValue": "ALTERNATE_REQUIRED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ALTERNATE_REQUIRED"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "e429aa8e-aa0d-4185-b62f-62845945a898",
+                    "leftValue": "={{$json.authorization_route}}",
+                    "rightValue": "ACTUAL_LOOKUP",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ACTUAL_LOOKUP"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        140,
+        -120
+      ],
+      "id": "bbf1c7e1-fab3-4034-82f7-0c6706b83151",
+      "name": "Authorization Attempt Router"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = JSON.parse(JSON.stringify($json.case_state));\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\nstate.authorization_attempt_count = 1;\nstate.agents_called.push('AUTHORIZATION');\nstate.tool_errors.push({ tool: 'AUTHORIZATION', attempt: 1, error: 'SIMULATED_AUTHORIZATION_SYSTEM_UNAVAILABLE' });\nstate.tool_calls.push({ tool: 'AUTHORIZATION', status: 'ERROR', attempt: 1, simulated: true, iteration: state.iteration });\naddTrace(state, 'MAIN', 'AUTH_PRIMARY_FAILURE_1', 'ERROR', { tool: 'AUTHORIZATION', attempt: 1, simulated: true });\naddTrace(state, 'MAIN', 'DOMAIN_TOOL_RESULT', 'ERROR', { tool: 'AUTHORIZATION', attempt: 1, simulated: true, returned_status: 'ERROR' });\naddTrace(state, 'MAIN', 'STATE_UPDATED', 'SUCCESS', { updated_fields: ['authorization_attempt_count', 'tool_errors', 'tool_calls'] });\nreturn [{ json: { case_state: state } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        -180
+      ],
+      "id": "c0f78ef7-51a1-4fa1-8eec-56fbbd89a8f6",
+      "name": "Record Primary Authorization Failure"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = JSON.parse(JSON.stringify($json.case_state));\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\nstate.authorization_attempt_count = 2;\nstate.agents_called.push('AUTHORIZATION');\nstate.tool_errors.push({ tool: 'AUTHORIZATION', attempt: 2, error: 'SIMULATED_AUTHORIZATION_SYSTEM_UNAVAILABLE' });\nstate.tool_calls.push({ tool: 'AUTHORIZATION', status: 'ERROR', attempt: 2, simulated: true, iteration: state.iteration });\naddTrace(state, 'MAIN', 'AUTH_PRIMARY_FAILURE_2', 'ERROR', { tool: 'AUTHORIZATION', attempt: 2, simulated: true });\naddTrace(state, 'MAIN', 'DOMAIN_TOOL_RESULT', 'ERROR', { tool: 'AUTHORIZATION', attempt: 2, simulated: true, returned_status: 'ERROR' });\naddTrace(state, 'MAIN', 'STATE_UPDATED', 'SUCCESS', { updated_fields: ['authorization_attempt_count', 'tool_errors', 'tool_calls'] });\nreturn [{ json: { case_state: state } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        -60
+      ],
+      "id": "f2277fd0-c41e-4123-87a2-55ee0d67f4b9",
+      "name": "Record Retry Authorization Failure"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = JSON.parse(JSON.stringify($json.case_state));\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\nstate.workflow_status = 'HUMAN_REVIEW_REQUIRED';\nstate.human_approval_required = true;\nstate.human_handoff_reason = 'Authorization retries were exhausted but alternate lookup was not selected.';\naddTrace(state, 'MAIN', 'SCN004_RECOVERY_EXHAUSTED', 'ERROR', { authorization_attempt_count: Number(state.authorization_attempt_count ?? 0) });\naddTrace(state, 'MAIN', 'HUMAN_ESCALATION', 'ERROR', { reason: state.human_handoff_reason });\nreturn [{ json: state }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        60
+      ],
+      "id": "8ac9be4d-8685-4ad8-87a3-9349224a5d06",
+      "name": "Finalize Invalid Authorization Strategy"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = JSON.parse(JSON.stringify($json.case_state));\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\nstate.authorization_attempt_count = Number(state.authorization_attempt_count ?? 0) + 1;\naddTrace(state, 'MAIN', 'DOMAIN_TOOL_START', 'STARTED', {\n  tool: 'AUTHORIZATION',\n  attempt: state.authorization_attempt_count,\n  input_flags: { member_id_present: Boolean(state.member_id), service_code_present: Boolean(state.service_code), service_date_present: Boolean(state.service_date) }\n});\nreturn [{ json: { case_state: state, member_id: state.member_id, service_code: state.service_code, service_date: state.service_date } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        180
+      ],
+      "id": "3bab6f35-5179-4056-9bc6-9990d450b191",
+      "name": "Prepare Authorization Input"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "c5ff9739-29de-4aa1-b99d-2adb845fcb80",
+          "mode": "list",
+          "cachedResultName": "OneCall AI - Authorization Tool"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "member_id": "={{$json.member_id}}",
+            "service_code": "={{$json.service_code}}",
+            "service_date": "={{$json.service_date}}"
+          },
+          "matchingColumns": [
+            "member_id",
+            "service_code",
+            "service_date"
+          ],
+          "schema": [
+            {
+              "id": "member_id",
+              "displayName": "member_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "service_code",
+              "displayName": "service_code",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "service_date",
+              "displayName": "service_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        660,
+        180
+      ],
+      "id": "a03bd82c-ae87-464d-afdd-6a3fd768631f",
+      "name": "Call Authorization Tool"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = JSON.parse(JSON.stringify($('Prepare Authorization Input').item.json.case_state));\nconst result = $input.first().json;\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\nstate.authorization = result;\nstate.agents_called.push('AUTHORIZATION');\nstate.tool_calls.push({ tool: 'AUTHORIZATION', status: result.status || 'ERROR', attempt: state.authorization_attempt_count, iteration: state.iteration });\nif (result.status === 'ERROR' || result.status === 'INVALID_INPUT') state.tool_errors.push({ tool: 'AUTHORIZATION', attempt: state.authorization_attempt_count, error: result.error || 'Authorization tool error' });\nconst resultStatus = typeof result.status === 'string' ? result.status : 'ERROR';\naddTrace(state, 'MAIN', 'DOMAIN_TOOL_RESULT', resultStatus === 'SUCCESS' ? 'OK' : (resultStatus === 'NOT_FOUND' ? 'WARN' : 'ERROR'), { tool: 'AUTHORIZATION', attempt: state.authorization_attempt_count, returned_status: resultStatus });\naddTrace(state, 'MAIN', 'STATE_UPDATED', 'SUCCESS', { updated_fields: ['authorization', 'authorization_attempt_count'] });\nreturn [{ json: { case_state: state } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        920,
+        180
+      ],
+      "id": "fccd1cc5-0d9f-491d-ba5b-1e562e2a830c",
+      "name": "Update Authorization State"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = JSON.parse(JSON.stringify($json.case_state));\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\nstate.authorization_alternate_used = true;\naddTrace(state, 'AUTHORIZATION', 'AUTH_ALTERNATE_SELECTED', 'OK', { authorization_attempt_count: Number(state.authorization_attempt_count ?? 0) });\naddTrace(state, 'AUTHORIZATION', 'AUTH_ALTERNATE_CALL', 'START', { authorization_attempt_count: Number(state.authorization_attempt_count ?? 0) });\naddTrace(state, 'MAIN', 'DOMAIN_TOOL_START', 'STARTED', {\n  tool: 'AUTHORIZATION_ALTERNATE',\n  input_flags: { member_id_present: Boolean(state.member_id), service_code_present: Boolean(state.service_code), service_date_present: Boolean(state.service_date) }\n});\nreturn [{ json: { case_state: state, member_id: state.member_id, service_code: state.service_code, service_date: state.service_date } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -120,
+        240
+      ],
+      "id": "e3a568fc-35cd-4e3c-846f-586260a14eb5",
+      "name": "Prepare Alternate Authorization Input"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "c5ff9739-29de-4aa1-b99d-2adb845fcb80",
+          "mode": "list",
+          "cachedResultName": "OneCall AI - Authorization Tool"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "member_id": "={{$json.member_id}}",
+            "service_code": "={{$json.service_code}}",
+            "service_date": "={{$json.service_date}}"
+          },
+          "matchingColumns": [
+            "member_id",
+            "service_code",
+            "service_date"
+          ],
+          "schema": [
+            {
+              "id": "member_id",
+              "displayName": "member_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "service_code",
+              "displayName": "service_code",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "service_date",
+              "displayName": "service_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        140,
+        240
+      ],
+      "id": "ab9525ce-c35d-478b-92dc-1af19d4d1175",
+      "name": "Call Authorization Tool Alternate"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = JSON.parse(JSON.stringify($('Prepare Alternate Authorization Input').item.json.case_state));\nconst result = $input.first().json;\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\nstate.authorization = result;\nstate.agents_called.push('AUTHORIZATION_ALTERNATE');\nstate.tool_calls.push({ tool: 'AUTHORIZATION_ALTERNATE', status: result.status || 'ERROR', attempt: state.authorization_attempt_count, iteration: state.iteration });\nif (result.status !== 'SUCCESS') state.tool_errors.push({ tool: 'AUTHORIZATION_ALTERNATE', attempt: state.authorization_attempt_count, error: result.error || 'Alternate authorization lookup failed' });\nconst resultStatus = typeof result.status === 'string' ? result.status : 'ERROR';\naddTrace(state, 'MAIN', 'DOMAIN_TOOL_RESULT', resultStatus === 'SUCCESS' ? 'OK' : (resultStatus === 'NOT_FOUND' ? 'WARN' : 'ERROR'), { tool: 'AUTHORIZATION_ALTERNATE', returned_status: resultStatus });\naddTrace(state, 'AUTHORIZATION', resultStatus === 'SUCCESS' ? 'AUTH_ALTERNATE_SUCCESS' : 'AUTH_ALTERNATE_RESULT', resultStatus === 'SUCCESS' ? 'OK' : 'ERROR', { returned_status: resultStatus });\naddTrace(state, 'MAIN', 'STATE_UPDATED', 'SUCCESS', { updated_fields: ['authorization', 'authorization_alternate_used'] });\nreturn [{ json: { case_state: state } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        240
+      ],
+      "id": "26777434-e648-4108-a21c-4349815bf229",
+      "name": "Update Alternate Authorization State"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = JSON.parse(JSON.stringify($json.case_state));\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\nconst providerId = state.claim?.data?.provider_id ?? state.authorization?.data?.provider_id ?? null;\naddTrace(state, 'MAIN', 'DOMAIN_TOOL_START', 'STARTED', { tool: 'PROVIDER', input_flags: { provider_id_present: Boolean(providerId) } });\nreturn [{ json: { case_state: state, provider_id: providerId } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -120,
+        480
+      ],
+      "id": "c014323b-4259-42b9-b5cf-a4fca1a08566",
+      "name": "Prepare Provider Input"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "76d97017-f6eb-48b9-ab2d-5e30958efeb8",
+          "mode": "list",
+          "cachedResultName": "OneCall AI - Provider Tool"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "provider_id": "={{$json.provider_id}}"
+          },
+          "matchingColumns": [
+            "provider_id"
+          ],
+          "schema": [
+            {
+              "id": "provider_id",
+              "displayName": "provider_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        140,
+        480
+      ],
+      "id": "48294431-1b42-48fe-9e31-36d4c7897b15",
+      "name": "Call Provider Tool"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = JSON.parse(JSON.stringify($('Prepare Provider Input').item.json.case_state));\nconst result = $input.first().json;\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\nstate.provider = result;\nstate.agents_called.push('PROVIDER');\nstate.tool_calls.push({ tool: 'PROVIDER', status: result.status || 'ERROR', iteration: state.iteration });\nif (result.status === 'ERROR' || result.status === 'INVALID_INPUT') state.tool_errors.push({ tool: 'PROVIDER', attempt: 1, error: result.error || 'Provider tool error' });\nconst resultStatus = typeof result.status === 'string' ? result.status : 'ERROR';\naddTrace(state, 'MAIN', 'DOMAIN_TOOL_RESULT', resultStatus === 'SUCCESS' ? 'OK' : (resultStatus === 'NOT_FOUND' ? 'WARN' : 'ERROR'), { tool: 'PROVIDER', returned_status: resultStatus });\naddTrace(state, 'MAIN', 'STATE_UPDATED', 'SUCCESS', { updated_fields: [\"provider\"] });\nreturn [{ json: { case_state: state } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        480
+      ],
+      "id": "c3dc250a-f48c-45eb-8748-0f5546e34888",
+      "name": "Update Provider State"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = JSON.parse(JSON.stringify($json.case_state));\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\naddTrace(state, 'MAIN', 'RESOLUTION_STARTED', 'STARTED', {\n  evidence_flags: {\n    eligibility_present: Boolean(state.eligibility),\n    benefits_present: Boolean(state.benefits),\n    claim_present: Boolean(state.claim),\n    authorization_present: Boolean(state.authorization),\n    provider_present: Boolean(state.provider)\n  }\n});\nreturn [{ json: { case_state: state, serialized_case_state: JSON.stringify(state) } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -120,
+        720
+      ],
+      "id": "14108f3f-fa29-4ef7-afb0-4142c605333e",
+      "name": "Prepare Resolution Input"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "d2f15189-d8a2-4a2f-a6eb-ebe0cf5f5013",
+          "mode": "list",
+          "cachedResultName": "OneCall AI - Resolution Agent"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "case_state": "={{$json.serialized_case_state}}"
+          },
+          "matchingColumns": [
+            "case_state"
+          ],
+          "schema": [
+            {
+              "id": "case_state",
+              "displayName": "case_state",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        140,
+        720
+      ],
+      "id": "46262f49-243c-4d25-aa08-b7a99976871c",
+      "name": "Call Resolution Agent"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = JSON.parse(JSON.stringify($('Prepare Resolution Input').item.json.case_state));\nconst result = $input.first().json;\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\nif (state.debug_trace_enabled && Array.isArray(result.debug_trace)) {\n  state.debug_trace = JSON.parse(JSON.stringify(result.debug_trace));\n}\nstate.agents_called.push('RESOLUTION');\nstate.final_resolution = result;\nstate.root_cause = result.root_cause;\nstate.recommended_action = result.recommended_action;\nstate.member_transfer_required = Boolean(result.member_transfer_required);\nconst approvalActions = new Set(['CLAIM_RECONSIDERATION', 'PROVIDER_INITIATE_AUTHORIZATION', 'ELIGIBILITY_RECORD_REVIEW']);\nstate.human_approval_required = approvalActions.has(result.recommended_action) || Boolean(result.human_approval_required);\nstate.human_handoff_reason = result.human_handoff_reason || (state.human_approval_required ? 'Representative approval is required before any payer action.' : null);\nif (result.status !== 'SUCCESS') {\n  state.workflow_status = 'HUMAN_REVIEW_REQUIRED';\n  state.human_approval_required = true;\n} else if (state.human_approval_required) {\n  state.workflow_status = 'AWAITING_HUMAN_APPROVAL';\n} else {\n  state.workflow_status = 'RESOLVED';\n}\naddTrace(state, 'RESOLUTION', 'RESOLUTION_COMPLETED', result.status === 'SUCCESS' ? 'SUCCESS' : 'ERROR', {\n  root_cause: typeof result.root_cause === 'string' ? result.root_cause : null,\n  recommended_action: typeof result.recommended_action === 'string' ? result.recommended_action : null,\n  confidence: typeof result.confidence === 'string' ? result.confidence : null,\n  member_transfer_required: Boolean(state.member_transfer_required),\n  human_approval_required: Boolean(state.human_approval_required)\n});\nif (result.status !== 'SUCCESS') addTrace(state, 'MAIN', 'HUMAN_ESCALATION', 'ERROR', { reason_code: 'RESOLUTION_AGENT_FAILURE' });\nreturn [{ json: state }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        720
+      ],
+      "id": "3662f17f-855d-44de-92da-b1c456351aa8",
+      "name": "Apply Resolution"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = JSON.parse(JSON.stringify($json.case_state));\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\nstate.workflow_status = 'HUMAN_REVIEW_REQUIRED';\nstate.human_approval_required = true;\nstate.human_handoff_reason = $json.reason || 'Orchestrator requested human escalation.';\naddTrace(state, 'MAIN', 'HUMAN_ESCALATION', 'ERROR', { reason: state.human_handoff_reason });\nreturn [{ json: state }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -120,
+        960
+      ],
+      "id": "0adfb909-a993-4f2b-bbbd-fdb29774fb61",
+      "name": "Finalize Human Escalation"
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Initialize Case State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize Case State": {
+      "main": [
+        [
+          {
+            "node": "Iteration Guard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Iteration Guard": {
+      "main": [
+        [
+          {
+            "node": "Max Iterations Exceeded?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Max Iterations Exceeded?": {
+      "main": [
+        [
+          {
+            "node": "Finalize Iteration Escalation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call Orchestrator Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Orchestrator Agent": {
+      "main": [
+        [
+          {
+            "node": "Apply Orchestrator Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Orchestrator Decision": {
+      "main": [
+        [
+          {
+            "node": "Decision Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decision Router": {
+      "main": [
+        [
+          {
+            "node": "Prepare Eligibility Input",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Benefits Input",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Claims Input",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Plan Authorization Attempt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Alternate Authorization Input",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Provider Input",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Resolution Input",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Finalize Human Escalation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Finalize Human Escalation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Eligibility Input": {
+      "main": [
+        [
+          {
+            "node": "Call Eligibility Tool",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Eligibility Tool": {
+      "main": [
+        [
+          {
+            "node": "Update Eligibility State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Eligibility State": {
+      "main": [
+        [
+          {
+            "node": "Iteration Guard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Benefits Input": {
+      "main": [
+        [
+          {
+            "node": "Call Benefits Tool",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Benefits Tool": {
+      "main": [
+        [
+          {
+            "node": "Update Benefits State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Benefits State": {
+      "main": [
+        [
+          {
+            "node": "Iteration Guard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Claims Input": {
+      "main": [
+        [
+          {
+            "node": "Call Claims Tool",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Claims Tool": {
+      "main": [
+        [
+          {
+            "node": "Update Claims State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Claims State": {
+      "main": [
+        [
+          {
+            "node": "Iteration Guard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan Authorization Attempt": {
+      "main": [
+        [
+          {
+            "node": "Authorization Attempt Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Authorization Attempt Router": {
+      "main": [
+        [
+          {
+            "node": "Record Primary Authorization Failure",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Record Retry Authorization Failure",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Finalize Invalid Authorization Strategy",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Authorization Input",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Finalize Invalid Authorization Strategy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record Primary Authorization Failure": {
+      "main": [
+        [
+          {
+            "node": "Iteration Guard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record Retry Authorization Failure": {
+      "main": [
+        [
+          {
+            "node": "Iteration Guard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Authorization Input": {
+      "main": [
+        [
+          {
+            "node": "Call Authorization Tool",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Authorization Tool": {
+      "main": [
+        [
+          {
+            "node": "Update Authorization State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Authorization State": {
+      "main": [
+        [
+          {
+            "node": "Iteration Guard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Alternate Authorization Input": {
+      "main": [
+        [
+          {
+            "node": "Call Authorization Tool Alternate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Authorization Tool Alternate": {
+      "main": [
+        [
+          {
+            "node": "Update Alternate Authorization State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Alternate Authorization State": {
+      "main": [
+        [
+          {
+            "node": "Iteration Guard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Provider Input": {
+      "main": [
+        [
+          {
+            "node": "Call Provider Tool",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Provider Tool": {
+      "main": [
+        [
+          {
+            "node": "Update Provider State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Provider State": {
+      "main": [
+        [
+          {
+            "node": "Iteration Guard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Resolution Input": {
+      "main": [
+        [
+          {
+            "node": "Call Resolution Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Resolution Agent": {
+      "main": [
+        [
+          {
+            "node": "Apply Resolution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": [],
+  "tags": []
+}

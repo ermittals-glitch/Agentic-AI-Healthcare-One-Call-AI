@@ -8,6 +8,8 @@ param(
         "domain-tools-automated-test-harness.json"
     ),
 
+    [switch]$UpdateExisting,
+
     [switch]$Force
 )
 
@@ -62,6 +64,20 @@ function Test-Uuid {
     return [guid]::TryParseExact($Value, "D", [ref]$parsedValue)
 }
 
+function Test-WorkflowId {
+    param(
+        [AllowNull()]
+        [object]$Value
+    )
+
+    return (
+        $Value -is [string] -and
+        -not [string]::IsNullOrWhiteSpace($Value) -and
+        $Value.Length -le 128 -and
+        $Value -match '^[A-Za-z0-9_-]+$'
+    )
+}
+
 Write-Host ""
 Write-Host "OneCall AI n8n Workflow Import"
 Write-Host ""
@@ -72,6 +88,7 @@ if ($Files.Count -eq 0) {
 
 $workflowIds = @{}
 $workflowVersionIds = @{}
+$workflowMetadata = @{}
 
 foreach ($file in $Files) {
     $leafName = Split-Path -Leaf $file
@@ -121,8 +138,8 @@ foreach ($file in $Files) {
         Stop-Import -Message "$file is not CLI-import ready: workflow name is empty."
     }
 
-    if (-not (Test-Uuid -Value $workflow.id)) {
-        Stop-Import -Message "$file is not CLI-import ready: workflow id is not a valid UUID."
+    if (-not (Test-WorkflowId -Value $workflow.id)) {
+        Stop-Import -Message "$file is not CLI-import ready: workflow id is not a valid stable n8n identifier."
     }
 
     if (-not (Test-Uuid -Value $workflow.versionId)) {
@@ -140,6 +157,10 @@ foreach ($file in $Files) {
         Stop-Import -Message "Duplicate versionId detected in $($workflowVersionIds[$versionIdKey]) and $file."
     }
     $workflowVersionIds[$versionIdKey] = $file
+    $workflowMetadata[$file] = [PSCustomObject]@{
+        Id = [string]$workflow.id
+        Name = [string]$workflow.name
+    }
 }
 
 $dockerCommand = Get-Command docker -ErrorAction SilentlyContinue
@@ -164,10 +185,32 @@ foreach ($file in $Files) {
     Invoke-DockerCheck -Arguments @("exec", $containerName, "test", "-f", "$workflowDirectory/$file") -FailureMessage "Workflow file is unavailable inside the container: $file"
 }
 
-Write-Warning (
-    "This importer is intended for newly generated workflows. " +
-    "Do not repeatedly import the same workflow unless you intentionally want another copy."
-)
+$existingWorkflowIds = @{}
+foreach ($file in $Files) {
+    $workflowId = $workflowMetadata[$file].Id
+    & docker exec $containerName n8n export:workflow "--id=$workflowId" *> $null
+    if ($LASTEXITCODE -eq 0) {
+        $existingWorkflowIds[$workflowId] = $file
+        if (-not $UpdateExisting) {
+            Stop-Import -Message (
+                "$file already exists in n8n with workflow id $workflowId. " +
+                "Re-run with -UpdateExisting to overwrite that same stable workflow id in place."
+            )
+        }
+    }
+}
+
+if ($UpdateExisting) {
+    Write-Warning (
+        "Stable workflow IDs already present in n8n will be overwritten in place. " +
+        "Unrelated workflows are not deleted or modified."
+    )
+} else {
+    Write-Warning (
+        "This importer is intended for newly generated workflows. " +
+        "Do not repeatedly import the same workflow unless you intentionally use -UpdateExisting."
+    )
+}
 
 if (-not $Force) {
     $confirmation = Read-Host "Type IMPORT to continue"
@@ -180,7 +223,12 @@ if (-not $Force) {
 $imported = 0
 foreach ($file in $Files) {
     Write-Host ""
-    Write-Host "Importing $file..."
+    $workflowId = $workflowMetadata[$file].Id
+    if ($existingWorkflowIds.ContainsKey($workflowId)) {
+        Write-Host "Updating $file..."
+    } else {
+        Write-Host "Importing $file..."
+    }
 
     & docker exec $containerName n8n import:workflow "--input=$workflowDirectory/$file"
 

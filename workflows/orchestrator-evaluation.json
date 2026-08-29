@@ -1,0 +1,203 @@
+{
+  "name": "OneCall AI - Orchestrator Automated Evaluation",
+  "id": "51efaf7f-33dd-4879-8a4e-8fde1d471e81",
+  "versionId": "458d4598-642f-4be7-8ced-dbe775fe74c3",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -700,
+        0
+      ],
+      "id": "07a69931-6e4f-4b9a-9b09-76ddd575774c",
+      "name": "Run Evaluation"
+    },
+    {
+      "parameters": {
+        "jsCode": "const cases = [\n  { scenario_id: 'SCN001', member_id: 'M1001', member_inquiry: \"My MRI claim was denied because insurance says there was no authorization, but my doctor's office says it was approved.\", service_code: 'MRI-SIM-001', service_date: '2026-05-14' },\n  { scenario_id: 'SCN002', member_id: 'M1002', member_inquiry: \"My MRI claim was denied because authorization wasn't found.\", service_code: 'MRI-SIM-001', service_date: '2026-06-10' },\n  { scenario_id: 'SCN003', member_id: 'M1003', member_inquiry: 'My doctor\\'s office says my insurance is inactive, but I enrolled months ago.', service_code: 'MRI-SIM-001', service_date: '' },\n  { scenario_id: 'SCN004', member_id: 'M1004', member_inquiry: \"My claim was denied, but the authorization system isn't responding.\", service_code: 'MRI-SIM-001', service_date: '2026-07-18' }\n];\nreturn cases.map(testCase => ({ json: testCase }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -460,
+        0
+      ],
+      "id": "7fe818f0-942a-4d63-8a39-d8d91364cdf8",
+      "name": "Generate Four Scenarios"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "41adbefe-7314-4c67-b9d7-34b86ceee453",
+          "mode": "list",
+          "cachedResultName": "OneCall AI - Main Orchestrator"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "scenario_id": "={{$json.scenario_id}}",
+            "member_id": "={{$json.member_id}}",
+            "member_inquiry": "={{$json.member_inquiry}}",
+            "service_code": "={{$json.service_code}}",
+            "service_date": "={{$json.service_date}}"
+          },
+          "matchingColumns": [
+            "scenario_id",
+            "member_id",
+            "member_inquiry",
+            "service_code",
+            "service_date"
+          ],
+          "schema": [
+            {
+              "id": "scenario_id",
+              "displayName": "scenario_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "member_id",
+              "displayName": "member_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "member_inquiry",
+              "displayName": "member_inquiry",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "service_code",
+              "displayName": "service_code",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "service_date",
+              "displayName": "service_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -200,
+        0
+      ],
+      "id": "7686d191-e841-4da2-acdb-f52d4e9d5cd9",
+      "name": "Call Main Orchestrator"
+    },
+    {
+      "parameters": {
+        "jsCode": "const expected = {\n  SCN001: { root_cause: 'AUTHORIZATION_CLAIM_LOCATION_MISMATCH', action: 'CLAIM_RECONSIDERATION' },\n  SCN002: { root_cause: 'PRIOR_AUTHORIZATION_MISSING', action: 'PROVIDER_INITIATE_AUTHORIZATION' },\n  SCN003: { root_cause: 'ELIGIBILITY_ENROLLMENT_MISMATCH', action: 'ELIGIBILITY_RECORD_REVIEW' },\n  SCN004: { root_cause: 'AUTHORIZATION_CLAIM_LINK_FAILURE', action: 'CLAIM_RECONSIDERATION' }\n};\nreturn $input.all().map(item => {\n  const state = item.json;\n  const exp = expected[state.scenario_id];\n  const failures = [];\n  if (!exp) failures.push('Unknown scenario returned');\n  if (exp && state.root_cause !== exp.root_cause) failures.push('Root cause mismatch');\n  if (exp && state.recommended_action !== exp.action) failures.push('Recommended action mismatch');\n  const called = Array.isArray(state.agents_called) ? state.agents_called : [];\n  if (state.scenario_id === 'SCN001') {\n    if (!called.includes('PROVIDER')) failures.push('Provider was not called');\n    if (state.member_transfer_required !== false) failures.push('Member transfer should be false');\n  }\n  if (state.scenario_id === 'SCN002') {\n    if (called.includes('PROVIDER')) failures.push('Provider should not be called');\n    if (state.member_transfer_required !== false) failures.push('Member transfer should be false');\n  }\n  if (state.scenario_id === 'SCN003') {\n    for (const unnecessary of ['CLAIMS', 'AUTHORIZATION', 'AUTHORIZATION_ALTERNATE', 'PROVIDER']) {\n      if (called.includes(unnecessary)) failures.push(unnecessary + ' should not be called');\n    }\n  }\n  if (state.scenario_id === 'SCN004') {\n    if (!Array.isArray(state.tool_errors) || state.tool_errors.filter(error => error.tool === 'AUTHORIZATION').length < 2) failures.push('Expected at least two authorization errors');\n    if (Number(state.authorization_attempt_count) < 2) failures.push('Expected at least two authorization attempts');\n    if (state.authorization_alternate_used !== true) failures.push('Alternate authorization lookup was not used');\n    if (state.authorization?.status !== 'SUCCESS') failures.push('Authorization did not eventually succeed');\n  }\n  const result = { scenario_id: state.scenario_id || 'UNKNOWN', passed: failures.length === 0, failures, actual: { workflow_status: state.workflow_status, root_cause: state.root_cause, recommended_action: state.recommended_action, member_transfer_required: state.member_transfer_required, agents_called: called, tool_error_count: Array.isArray(state.tool_errors) ? state.tool_errors.length : 0, authorization_attempt_count: state.authorization_attempt_count, authorization_alternate_used: state.authorization_alternate_used, authorization_status: state.authorization?.status ?? null } };\n  if (state.debug_trace_enabled === true) {\n    const trace = Array.isArray(state.debug_trace) ? state.debug_trace : [];\n    result.debug_trace = trace;\n    result.first_error_event = trace.find(entry => entry && (entry.status === 'ERROR' || entry.status === 'FAILURE')) || null;\n  }\n  return { json: result };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        60,
+        0
+      ],
+      "id": "7dfe1d23-b4a3-4b12-ac8a-46d0edd9a493",
+      "name": "Assert All Scenario Contracts"
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = $input.all().map(item => item.json);\nconst passed = results.filter(result => result.passed).length;\nreturn [{ json: { suite: 'OneCall AI Agentic Scenarios', status: passed === results.length ? 'PASS' : 'FAIL', total: results.length, passed, failed: results.length - passed, results } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        0
+      ],
+      "id": "08b46b8f-771d-4eec-99fc-814c3f7ecb33",
+      "name": "Build Evaluation Summary"
+    }
+  ],
+  "connections": {
+    "Run Evaluation": {
+      "main": [
+        [
+          {
+            "node": "Generate Four Scenarios",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Four Scenarios": {
+      "main": [
+        [
+          {
+            "node": "Call Main Orchestrator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Main Orchestrator": {
+      "main": [
+        [
+          {
+            "node": "Assert All Scenario Contracts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assert All Scenario Contracts": {
+      "main": [
+        [
+          {
+            "node": "Build Evaluation Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": [],
+  "tags": []
+}

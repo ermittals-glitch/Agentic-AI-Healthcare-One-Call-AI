@@ -1,0 +1,185 @@
+{
+  "name": "OneCall AI - Resolution Agent",
+  "id": "d2f15189-d8a2-4a2f-a6eb-ebe0cf5f5013",
+  "versionId": "b10eb741-5649-43a7-b48e-98c71a536f3a",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "case_state",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -720,
+        0
+      ],
+      "id": "22590ed7-7989-4c36-ad4d-d1f11808d284",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c94cb544-7d58-4f20-8780-65f920a92cd7",
+              "name": "nebius_endpoint",
+              "value": "https://api.tokenfactory.nebius.com/v1/chat/completions",
+              "type": "string"
+            },
+            {
+              "id": "223e917e-9b2d-49a4-92a1-b49afdebd6d2",
+              "name": "nebius_model",
+              "value": "={{$env.NEBIUS_MODEL}}",
+              "type": "string"
+            },
+            {
+              "id": "4ca5974e-1b5d-4c68-be9b-4b61375704f0",
+              "name": "temperature",
+              "value": 0,
+              "type": "number"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -500,
+        0
+      ],
+      "id": "cbe5499e-b124-4ac7-894f-d1c47bac7fe5",
+      "name": "Agent Configuration"
+    },
+    {
+      "parameters": {
+        "jsCode": "let state = $json.case_state;\nif (typeof state === 'string') {\n  try { state = JSON.parse(state); } catch (error) {\n    state = { workflow_status: 'HUMAN_ESCALATION', input_error: error.message };\n  }\n}\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\nconst endpointHost = String($json.nebius_endpoint ?? '').replace(/^https?:\\/\\//, '').split('/')[0] || null;\naddTrace(state, 'RESOLUTION', 'RESOLUTION_NEBIUS_REQUEST_PREPARED', 'OK', {\n  model_configured: Boolean(String($json.nebius_model ?? '').trim()),\n  auth_configured: Boolean(String($env.NEBIUS_API_KEY ?? '').trim()),\n  endpoint_host: endpointHost,\n  temperature: Number($json.temperature ?? 0),\n  reasoning_effort: 'low',\n  max_completion_tokens: 1200,\n  response_format_type: 'json_object',\n  message_count: 2,\n  request_body_keys: ['model', 'temperature', 'reasoning_effort', 'max_completion_tokens', 'response_format', 'messages']\n});\nconst promptState = JSON.parse(JSON.stringify(state));\ndelete promptState.debug_trace;\ndelete promptState.debug_trace_enabled;\nconst systemPrompt = \"You are the resolution agent for a healthcare payer member servicing case. Use only supplied case_state evidence. Never invent facts, diagnose, or recommend treatment. Do not choose tools. Distinguish deterministic tool facts from inference. Allowed root_cause values: AUTHORIZATION_CLAIM_LOCATION_MISMATCH, PRIOR_AUTHORIZATION_MISSING, ELIGIBILITY_ENROLLMENT_MISMATCH, AUTHORIZATION_CLAIM_LINK_FAILURE, INSUFFICIENT_EVIDENCE. Allowed recommended_action values: CLAIM_RECONSIDERATION, PROVIDER_INITIATE_AUTHORIZATION, ELIGIBILITY_RECORD_REVIEW, HUMAN_REVIEW. Allowed confidence values: HIGH, MEDIUM, LOW. Prefer no member transfer when frontline servicing can submit an internal action. CLAIM_RECONSIDERATION, PROVIDER_INITIATE_AUTHORIZATION, and ELIGIBILITY_RECORD_REVIEW require human approval because no payer write may be performed. When the state records two primary authorization system errors, authorization_alternate_used is true, and the alternate lookup returns a successful authorization while the claim still records an authorization-not-found denial, use AUTHORIZATION_CLAIM_LINK_FAILURE and CLAIM_RECONSIDERATION. If evidence is insufficient, use INSUFFICIENT_EVIDENCE and HUMAN_REVIEW with human_approval_required true. Return JSON only with agent, status, root_cause, root_cause_explanation, recommended_action, next_best_action_explanation, member_transfer_required, human_approval_required, human_handoff_reason, confidence, error.\";\nreturn [{\n  json: {\n    ...$json,\n    case_state: state,\n    request_body: {\n      model: $json.nebius_model,\n      temperature: Number($json.temperature ?? 0),\n      reasoning_effort: 'low',\n      max_completion_tokens: 1200,\n      response_format: { type: 'json_object' },\n      messages: [\n        { role: 'system', content: systemPrompt },\n        { role: 'user', content: 'Resolve this case_state using only its evidence:\\n' + JSON.stringify(promptState) }\n      ]\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -260,
+        0
+      ],
+      "id": "73849027-72d8-4a35-93d6-1a64a720f382",
+      "name": "Build Resolution Request"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$json.nebius_endpoint}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept-Encoding",
+              "value": "identity"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.NEBIUS_API_KEY}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.request_body) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "autodetect"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "7c88f2a4-e9de-44d0-a05e-3677f8a58adc",
+      "name": "Nebius Resolution Inference",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const buildContext = $('Build Resolution Request').first().json;\nconst state = JSON.parse(JSON.stringify(buildContext.case_state));\nconst addTrace = (state, component, event, status, details = {}) => {\n  if (!state.debug_trace_enabled) return;\n  if (!Array.isArray(state.debug_trace)) state.debug_trace = [];\n  const normalizedStatus = status === 'SUCCESS' ? 'OK' : status === 'STARTED' ? 'START' : status === 'FAILURE' ? 'ERROR' : status;\n  state.debug_trace.push({\n    seq: state.debug_trace.length + 1,\n    timestamp: new Date().toISOString(),\n    component,\n    event,\n    status: normalizedStatus,\n    iteration: Number(state.iteration ?? 0),\n    details\n  });\n};\nconst rootCauses = new Set(['AUTHORIZATION_CLAIM_LOCATION_MISMATCH', 'PRIOR_AUTHORIZATION_MISSING', 'ELIGIBILITY_ENROLLMENT_MISMATCH', 'AUTHORIZATION_CLAIM_LINK_FAILURE', 'INSUFFICIENT_EVIDENCE']);\nconst actions = new Set(['CLAIM_RECONSIDERATION', 'PROVIDER_INITIATE_AUTHORIZATION', 'ELIGIBILITY_RECORD_REVIEW', 'HUMAN_REVIEW']);\nconst confidences = new Set(['HIGH', 'MEDIUM', 'LOW']);\nlet diagnostic = null;\nconst hasOwn = (value, key) => Boolean(\n  value && typeof value === 'object' && Object.prototype.hasOwnProperty.call(value, key)\n);\nconst normalizeContent = (value) => {\n  if (typeof value === 'string') return value.trim() ? value : null;\n  if (value && typeof value === 'object' && !Array.isArray(value)) return value;\n  if (!Array.isArray(value) || value.length === 0) return null;\n  const textParts = [];\n  for (const part of value) {\n    if (typeof part === 'string') {\n      textParts.push(part);\n      continue;\n    }\n    if (!part || typeof part !== 'object' || Array.isArray(part)) return null;\n    const keys = Object.keys(part);\n    const explicitTextPart = (\n      typeof part.text === 'string' &&\n      (part.type === 'text' || part.type === 'output_text') &&\n      keys.every(key => key === 'type' || key === 'text')\n    );\n    if (!explicitTextPart) return null;\n    textParts.push(part.text);\n  }\n  const joined = textParts.join('').trim();\n  return joined || null;\n};\ntry {\n  const received = $input.first().json;\n  let normalizationPath = 'DIRECT';\n  let response = received;\n  if (received?.body !== null && received?.body !== undefined) { response = received.body; normalizationPath = 'BODY'; }\n  else if (received?.data !== null && received?.data !== undefined) { response = received.data; normalizationPath = 'DATA'; }\n  else if (received?.response !== null && received?.response !== undefined) { response = received.response; normalizationPath = 'RESPONSE'; }\n  else if (received?.json !== null && received?.json !== undefined) { response = received.json; normalizationPath = 'JSON'; }\n  if (typeof response === 'string') {\n    const trimmedResponse = response.trim();\n    if (trimmedResponse.startsWith('{') || trimmedResponse.startsWith('[')) {\n      try { response = JSON.parse(trimmedResponse); normalizationPath += '+STRING_PARSED'; } catch (error) {}\n    }\n  }\n  if (Array.isArray(response) && response.length === 1 && response[0] && typeof response[0] === 'object') {\n    response = response[0];\n    normalizationPath += '+ARRAY_FIRST_ITEM';\n  }\n  const responseIsObject = Boolean(response && typeof response === 'object' && !Array.isArray(response));\n  const choices = responseIsObject && Array.isArray(response.choices) ? response.choices : [];\n  const choice = choices[0];\n  const message = choice && typeof choice.message === 'object' && !Array.isArray(choice.message) ? choice.message : null;\n  const messageContentPresent = hasOwn(message, 'content') && message.content !== null && message.content !== undefined;\n  const messageContent = messageContentPresent ? normalizeContent(message.content) : null;\n  const textPresent = hasOwn(choice, 'text') && choice.text !== null && choice.text !== undefined;\n  const fallbackContent = !messageContentPresent && textPresent ? normalizeContent(choice.text) : null;\n  const content = messageContent ?? fallbackContent;\n  const contentType = content === null ? 'missing' : (Array.isArray(content) ? 'array' : typeof content);\n  const contentLength = typeof content === 'string' ? content.length : null;\n  const contentSource = messageContent !== null\n    ? (Array.isArray(message?.content) ? 'TEXT_ARRAY' : (typeof message?.content === 'object' ? 'OBJECT_CONTENT' : 'MESSAGE_CONTENT'))\n    : (fallbackContent !== null ? 'CHOICE_TEXT' : null);\n  const valueType = (value) => value === null ? 'null' : (Array.isArray(value) ? 'array' : typeof value);\n  const objectKeys = (value) => value && typeof value === 'object' && !Array.isArray(value) ? Object.keys(value).sort() : [];\n  const usage = responseIsObject && response.usage && typeof response.usage === 'object' ? response.usage : null;\n  diagnostic = {\n    normalization_path: normalizationPath,\n    value_type: valueType(received),\n    top_level_keys: objectKeys(received),\n    has_body: hasOwn(received, 'body'), body_type: valueType(received?.body), body_keys: objectKeys(received?.body),\n    has_data: hasOwn(received, 'data'), data_type: valueType(received?.data), data_keys: objectKeys(received?.data),\n    has_response: hasOwn(received, 'response'), response_type: valueType(received?.response), response_keys_wrapper: objectKeys(received?.response),\n    has_json: hasOwn(received, 'json'), json_type: valueType(received?.json), json_keys: objectKeys(received?.json),\n    normalized_type: valueType(response), normalized_keys: objectKeys(response),\n    http_status_if_available: Number(received?.statusCode ?? received?.status ?? 0) || null,\n    has_choices: choices.length > 0, choices_count: choices.length,\n    first_choice_keys: objectKeys(choice), finish_reason: choice && typeof choice.finish_reason === 'string' ? choice.finish_reason : null,\n    has_message: Boolean(message), message_keys: objectKeys(message),\n    content_exists: content !== null, content_type: contentType, content_length: contentLength,\n    has_choice_text: textPresent, choice_text_type: valueType(choice?.text), choice_text_length: typeof choice?.text === 'string' ? choice.text.length : null,\n    has_reasoning_content: hasOwn(message, 'reasoning_content') || hasOwn(choice, 'reasoning_content'),\n    usage_present: Boolean(usage),\n    prompt_tokens_if_available: Number(usage?.prompt_tokens ?? 0) || null,\n    completion_tokens_if_available: Number(usage?.completion_tokens ?? 0) || null,\n    total_tokens_if_available: Number(usage?.total_tokens ?? 0) || null\n  };\n  addTrace(state, 'NEBIUS_HTTP', 'RESOLUTION_HTTP_RESPONSE', responseIsObject && !hasOwn(response, 'error') ? 'OK' : 'ERROR', diagnostic);\n  addTrace(state, 'PARSER', 'RESOLUTION_PARSER_INPUT_NORMALIZED', responseIsObject ? 'OK' : 'ERROR', { normalization_path: normalizationPath, value_type: diagnostic.value_type, normalized_type: diagnostic.normalized_type, normalized_keys: diagnostic.normalized_keys });\n  addTrace(state, 'PARSER', 'RESOLUTION_FINAL_CONTENT_LOCATED', content === null ? 'ERROR' : 'OK', { source: contentSource, content_type: contentType, content_length: contentLength });\n  if (responseIsObject && hasOwn(response, 'error')) throw new Error('Nebius API returned an error response.');\n  if (content === null) throw new Error('Nebius response did not contain usable final content.');\n  let parsed;\n  if (content && typeof content === 'object' && !Array.isArray(content)) {\n    parsed = content;\n  } else if (typeof content === 'string') {\n    let cleaned = content.trim();\n    const fence = String.fromCharCode(96).repeat(3);\n    if (cleaned.toLowerCase().startsWith(fence + 'json')) {\n      cleaned = cleaned.slice(fence.length + 4).trim();\n      if (cleaned.endsWith(fence)) cleaned = cleaned.slice(0, -fence.length).trim();\n    }\n    try {\n      parsed = JSON.parse(cleaned);\n    } catch (error) {\n      addTrace(state, 'PARSER', 'RESOLUTION_JSON_PARSE_RESULT', 'ERROR', { success: false, parsed_keys: [], parse_error_type: 'SYNTAX_ERROR' });\n      throw new Error('Nebius final content was not valid JSON.');\n    }\n  } else {\n    throw new Error('Nebius response did not contain usable final content.');\n  }\n  addTrace(state, 'PARSER', 'RESOLUTION_JSON_PARSE_RESULT', 'OK', { success: true, parsed_keys: parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? Object.keys(parsed).sort() : [], parse_error_type: null });\n  const enumChecks = {\n    root_cause_valid: rootCauses.has(parsed.root_cause),\n    recommended_action_valid: actions.has(parsed.recommended_action),\n    confidence_valid: confidences.has(parsed.confidence),\n    explanations_valid: typeof parsed.root_cause_explanation === 'string' && typeof parsed.next_best_action_explanation === 'string',\n    boolean_fields_valid: typeof parsed.member_transfer_required === 'boolean' && typeof parsed.human_approval_required === 'boolean'\n  };\n  const enumValidationPassed = Object.values(enumChecks).every(Boolean);\n  addTrace(state, 'PARSER', 'RESOLUTION_ENUM_VALIDATION', enumValidationPassed ? 'OK' : 'ERROR', { ...enumChecks, valid: enumValidationPassed });\n  if (!enumChecks.root_cause_valid) throw new Error('Invalid root cause: ' + String(parsed.root_cause));\n  if (!enumChecks.recommended_action_valid) throw new Error('Invalid recommended action: ' + String(parsed.recommended_action));\n  if (!enumChecks.confidence_valid) throw new Error('Invalid confidence: ' + String(parsed.confidence));\n  if (!enumChecks.explanations_valid) throw new Error('Resolution explanations are required.');\n  if (!enumChecks.boolean_fields_valid) throw new Error('Resolution boolean fields are invalid.');\n  return [{ json: { agent: 'RESOLUTION', status: 'SUCCESS', debug_trace: state.debug_trace, root_cause: parsed.root_cause, root_cause_explanation: parsed.root_cause_explanation, recommended_action: parsed.recommended_action, next_best_action_explanation: parsed.next_best_action_explanation, member_transfer_required: parsed.member_transfer_required, human_approval_required: parsed.human_approval_required, human_handoff_reason: typeof parsed.human_handoff_reason === 'string' ? parsed.human_handoff_reason : '', confidence: parsed.confidence, error: null } }];\n} catch (error) {\n  const errorCategory = error.message.startsWith('Nebius API') ? 'API_ERROR' : error.message.includes('usable final content') ? 'FINAL_CONTENT_MISSING' : error.message.includes('valid JSON') ? 'JSON_PARSE_FAILED' : error.message.startsWith('Invalid ') ? 'ENUM_VALIDATION_FAILED' : 'OUTPUT_VALIDATION_FAILED';\n  addTrace(state, 'PARSER', 'RESOLUTION_PARSE_FAILURE', 'ERROR', { error_category: errorCategory, diagnostic_available: Boolean(diagnostic) });\n  return [{ json: { agent: 'RESOLUTION', status: 'ERROR', debug_trace: state.debug_trace, root_cause: 'INSUFFICIENT_EVIDENCE', root_cause_explanation: 'Resolution output could not be safely validated.', recommended_action: 'HUMAN_REVIEW', next_best_action_explanation: 'A representative must review the accumulated evidence.', member_transfer_required: false, human_approval_required: true, human_handoff_reason: 'Unable to parse resolution agent output.', confidence: 'LOW', error: error.message + (diagnostic ? ' Diagnostic: ' + JSON.stringify(diagnostic) : ''), diagnostic } }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ],
+      "id": "5045d7ba-eca7-48ed-8b8b-f98f14d218ff",
+      "name": "Parse Resolution Result"
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Agent Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent Configuration": {
+      "main": [
+        [
+          {
+            "node": "Build Resolution Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Resolution Request": {
+      "main": [
+        [
+          {
+            "node": "Nebius Resolution Inference",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nebius Resolution Inference": {
+      "main": [
+        [
+          {
+            "node": "Parse Resolution Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": [],
+  "tags": []
+}
