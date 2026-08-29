@@ -1,0 +1,23 @@
+[theme]
+base = "light"
+primaryColor = "#0B5CAD"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F3F7FA"
+textColor = "#172B3A"
+linkColor = "#0B5CAD"
+borderColor = "#CBD8E3"
+greenColor = "#18794E"
+orangeColor = "#A15C00"
+redColor = "#B42318"
+blueColor = "#0B5CAD"
+baseRadius = "8px"
+buttonRadius = "8px"
+showWidgetBorder = true
+showSidebarBorder = true
+font = "sans-serif"
+
+[server]
+headless = true
+
+[client]
+toolbarMode = "minimal"
