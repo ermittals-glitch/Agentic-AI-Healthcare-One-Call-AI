@@ -1,0 +1,121 @@
+{
+  "name": "OneCall AI - Eligibility Tool Test Caller",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "1ab73b1f-9a62-43f6-9d58-0a81132ddd36",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ed7b92c8-57ab-4b97-8c8c-c16cb425298f",
+              "name": "member_id",
+              "value": "M9999",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        224,
+        0
+      ],
+      "id": "ca5fcacc-541d-497a-9718-f953e95f0b88",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "CqgfaCdp1DduH3OB",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/CqgfaCdp1DduH3OB",
+          "cachedResultName": "OneCall AI - Eligibility Tool"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "member_id": "={{$json.member_id}}"
+          },
+          "matchingColumns": [
+            "member_id"
+          ],
+          "schema": [
+            {
+              "id": "member_id",
+              "displayName": "member_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        448,
+        0
+      ],
+      "id": "e0ffb44b-7391-448a-8f98-9d41675717b8",
+      "name": "Call 'OneCall AI - Eligibility Tool'"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Call 'OneCall AI - Eligibility Tool'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "d4ec351c-bae5-4874-afb8-14baa9c76164",
+  "meta": {
+    "instanceId": "93f74e82f23f8980313a62546084fe63e8b1410b81aabb04dde78afd1b74a7e5"
+  },
+  "nodeGroups": [],
+  "id": "JTzWHOTYNWB7rEOp",
+  "tags": []
+}

@@ -1,0 +1,113 @@
+{
+  "name": "OneCall AI - Eligibility Tool",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "member_id"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "5c723903-bd11-4f18-86db-dfcef023a3c4",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "fileSelector": "/files/data/members.json",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        224,
+        0
+      ],
+      "id": "a67e99c5-5f8c-4cb9-98e6-7e4c04d08d7f",
+      "name": "Read Members Data"
+    },
+    {
+      "parameters": {
+        "operation": "fromJson",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        448,
+        0
+      ],
+      "id": "59d4edab-75d9-43e0-b40f-986c929e8ea3",
+      "name": "Parse Members JSON"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get member_id passed into this sub-workflow\nconst memberId =\n  $('When Executed by Another Workflow').first().json.member_id;\n\n// Parsed members.json from the previous node\nconst members = $input.first().json.data;\n\n// Validate input\nif (!memberId) {\n  return [\n    {\n      json: {\n        tool: \"ELIGIBILITY\",\n        status: \"INVALID_INPUT\",\n        member_id: null,\n        data: null,\n        error: \"member_id is required\"\n      }\n    }\n  ];\n}\n\n// Find requested member\nconst member = members.find(\n  (record) => record.member_id === memberId\n);\n\n// Member not found\nif (!member) {\n  return [\n    {\n      json: {\n        tool: \"ELIGIBILITY\",\n        status: \"NOT_FOUND\",\n        member_id: memberId,\n        data: null,\n        error: \"Member not found\"\n      }\n    }\n  ];\n}\n\n// Return only fields useful to servicing\nreturn [\n  {\n    json: {\n      tool: \"ELIGIBILITY\",\n      status: \"SUCCESS\",\n      member_id: member.member_id,\n      data: {\n        name: member.name,\n        plan_id: member.plan_id,\n        plan_name: member.plan_name,\n        coverage_status: member.coverage_status,\n        coverage_effective_date: member.coverage_effective_date,\n        coverage_termination_date:\n          member.coverage_termination_date ?? null,\n        enrollment_status: member.enrollment_status,\n        enrollment_effective_date:\n          member.enrollment_effective_date ?? null,\n        eligibility_last_synced_date:\n          member.eligibility_last_synced_date ?? null\n      },\n      error: null\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "id": "2ffce294-3c45-47b5-b076-89927eb1a49a",
+      "name": "Lookup Member Eligibility"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Read Members Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Members Data": {
+      "main": [
+        [
+          {
+            "node": "Parse Members JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Members JSON": {
+      "main": [
+        [
+          {
+            "node": "Lookup Member Eligibility",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "047aa44b-559a-4bd4-828d-d357d99e7eb2",
+  "meta": {
+    "instanceId": "93f74e82f23f8980313a62546084fe63e8b1410b81aabb04dde78afd1b74a7e5"
+  },
+  "nodeGroups": [],
+  "id": "CqgfaCdp1DduH3OB",
+  "tags": []
+}
